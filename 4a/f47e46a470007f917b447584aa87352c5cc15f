@@ -1,0 +1,28 @@
+.gitignore
+  s_d00ea242c0aaf7::t_0d59c25fc0c380 10-15
+  s_ba2052cbdc0776::t_74f19ef43795aa 33-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "4af47e46a470007f917b447584aa87352c5cc15f",
+  "prompts": {},
+  "sessions": {
+    "s_ba2052cbdc0776": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b4b0a49-e7ea-4669-a716-259c918c0c41",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ary Rabelo <aryrabelo@gmail.com>"
+    },
+    "s_d00ea242c0aaf7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ad42263-f096-4d20-8b6e-ad9e8b7f7151",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
