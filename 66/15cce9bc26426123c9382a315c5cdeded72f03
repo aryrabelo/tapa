@@ -1,0 +1,74 @@
+CHANGELOG.md
+  s_a0c3ea2e3c0cc0::t_32655d7440e86b 1-25
+.github/ISSUE_TEMPLATE/feature_request.yml
+  s_a0c3ea2e3c0cc0::t_6f4a5a9e09c2aa 1-32
+.gitignore
+  s_a0c3ea2e3c0cc0::t_0d3cd15b300281 21-25,27-32
+LICENSE
+  s_a0c3ea2e3c0cc0::t_e3816d1336ea28 1-21
+.github/pull_request_template.md
+  s_a0c3ea2e3c0cc0::t_dbe724e13359ac 1-18
+.github/workflows/release.yml
+  s_a0c3ea2e3c0cc0::t_a4eddc70d9cf1e 1-70
+.github/ISSUE_TEMPLATE/bug_report.yml
+  s_a0c3ea2e3c0cc0::t_dc9c78404b4bee 1-43
+package-lock.json
+  s_713a81726777a8::t_eb50a81668382e 2-3,8-10
+src-tauri/Cargo.toml
+  s_a0c3ea2e3c0cc0::t_4bea832de93d14 5-7
+SECURITY.md
+  s_a0c3ea2e3c0cc0::t_de5b4323594cd3 1-31
+CONTRIBUTING.md
+  s_a0c3ea2e3c0cc0::t_4757a1dbfa2399 1-68
+package.json
+  s_a0c3ea2e3c0cc0::t_8a7333ee3adecd 3,13-29
+.github/workflows/ci.yml
+  s_a0c3ea2e3c0cc0::t_59512bf130db8a 1-88
+.github/ISSUE_TEMPLATE/config.yml
+  s_a0c3ea2e3c0cc0::t_bfcc94d0ee2bb8 1-5
+README.md
+  s_aaeea95cf72877::t_8a2099375ae743 55-72,74-79,86
+  s_45c970cbb28790::t_190cadb204192d 3-9
+  s_a0c3ea2e3c0cc0::t_7e6def12d6850c 170-177,180
+  s_a0c3ea2e3c0cc0::t_4dc3c9e09abaed 114-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "6615cce9bc26426123c9382a315c5cdeded72f03",
+  "prompts": {},
+  "sessions": {
+    "s_45c970cbb28790": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "553144e2-0c43-484b-a8a2-18019a8c0f6f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ary Rabelo <aryrabelo@gmail.com>"
+    },
+    "s_713a81726777a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b506beab-fd44-418e-9592-cc568545d822",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ary Rabelo <aryrabelo@gmail.com>"
+    },
+    "s_a0c3ea2e3c0cc0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "18cf1cbe-c939-4b62-93c7-db257ed91d83",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ary Rabelo <aryrabelo@gmail.com>"
+    },
+    "s_aaeea95cf72877": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9d1b3ec0-2b1e-4905-b846-702e21959321",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ary Rabelo <aryrabelo@gmail.com>"
+    }
+  }
+}
