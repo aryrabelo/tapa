@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Tauri / Rust build artifacts
+src-tauri/target/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Agentic / internal process docs and tooling — kept private, never committed
+GOAL.md
+NORTH.md
+docs/superpowers/
+autoresearch.sh
+
+# Agent harness / orchestration state and scratch
+.harness-mem/
+.claude/
+.cmux/
+.cmux-workspace/
+.cmux_workspace/
+artifacts/
+.worktrees/
