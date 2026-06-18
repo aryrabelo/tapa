@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
@@ -21,7 +21,7 @@ export function Reader({
 
   // After a search jump, scroll to the rendered block nearest the target line's
   // source offset (data-so), then consume the request so it fires once.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (scrollLine == null || !containerRef.current) return;
     const target = lineStartOffset(content, scrollLine);
     let best: HTMLElement | null = null;

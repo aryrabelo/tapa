@@ -12,7 +12,28 @@
   },
   "linter": {
     "enabled": true,
-    "rules": { "recommended": true }
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "noNestedComponentDefinitions": "error",
+        "useUniqueElementIds": "warn",
+        "useExhaustiveDependencies": {
+          "level": "error",
+          "options": { "reportMissingDependenciesArray": true }
+        }
+      },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 20 }
+        }
+      },
+      "suspicious": {
+        "noConsole": "warn"
+      }
+    }
   },
   "javascript": {
     "formatter": { "quoteStyle": "double", "semicolons": "always" }

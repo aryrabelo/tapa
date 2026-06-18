@@ -1,25 +1,17 @@
 import { PanelLeft } from "@/components/ui/icons";
 import type * as React from "react";
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import {
-  pickFile,
-  pickFolder,
-  readFile,
-  scanTree,
-  searchContent,
-  takePendingOpen,
-  watchFolder,
-  writeFile,
-  type SearchHit,
-} from "@/lib/tauri";
+import { pickFile, pickFolder, readFile, scanTree, watchFolder, writeFile } from "@/lib/tauri";
 import { onToasterNeeded, toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
-import { registry, useActivePanel } from "@/lib/registry";
+import { matchesBinding, registry, useActivePanel } from "@/lib/registry";
 import { searchModule } from "@/modules/search";
+import { useSearch } from "@/modules/search/useSearch";
+import { useFileWatcher } from "@/lib/useFileWatcher";
+import { useOsOpen } from "@/lib/useOsOpen";
 
 // codemirror (~169KB gzip) is only used in edit mode. Load it on demand so the
 // reader-first startup bundle stays lean (smaller webview memory + faster boot).
@@ -79,43 +71,25 @@ export default function App(): React.ReactElement {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Content search (⌘⇧F) — a registry-driven overlay streaming hits from Rust.
   const activePanelId = useActivePanel();
-  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const search = useSearch(openFile);
+  useFileWatcher();
 
+  // One app-wide keybinding dispatcher: routes a registered command's
+  // `keybinding` to the registry. Replaces per-feature keydown effects.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        void registry.runCommand("search.open");
+      for (const cmd of registry.commands()) {
+        if (cmd.keybinding && matchesBinding(cmd.keybinding, e)) {
+          e.preventDefault();
+          void registry.runCommand(cmd.id);
+          return;
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  // Debounced streaming search against the open root. A superseded query drops
-  // its in-flight hits (alive flag) and lets the prior Channel be GC'd, which
-  // stops the Rust walk; results are capped at 100 rows.
-  useEffect(() => {
-    const { root } = useStore.getState();
-    if (!root || !searchQuery) {
-      setSearchHits([]);
-      return;
-    }
-    let alive = true;
-    const t = setTimeout(() => {
-      setSearchHits([]);
-      void searchContent(root, searchQuery, { regex: false }, (hit) => {
-        if (alive) setSearchHits((prev) => (prev.length >= 100 ? prev : [...prev, hit]));
-      });
-    }, 150);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
-  }, [searchQuery]);
 
   async function openFolder() {
     const root = await pickFolder();
@@ -177,15 +151,6 @@ export default function App(): React.ReactElement {
     }
   }
 
-  // Open a search hit: load its file, then ask the reader to scroll to the line.
-  async function onSearchPick(hit: SearchHit) {
-    await openFile(hit.path);
-    useStore.getState().setScrollLine(hit.line);
-    void registry.runCommand("search.close");
-    setSearchQuery("");
-    setSearchHits([]);
-  }
-
   async function save(): Promise<boolean> {
     const { root, activePath, content } = useStore.getState();
     if (!root || !activePath) return false;
@@ -207,99 +172,7 @@ export default function App(): React.ReactElement {
     if (await save()) useStore.getState().exitEdit();
   };
 
-  // Reloads the active file from disk, discarding the in-memory buffer.
-  const reloadActive = useCallback(async () => {
-    const { root, activePath } = useStore.getState();
-    if (!root || !activePath) return;
-    try {
-      const c = await readFile(`${root}/${activePath}`);
-      useStore.getState().setActive(activePath, c);
-    } catch (e) {
-      toast.error(String(e));
-    }
-  }, []);
-
-  // External change handling (reload if clean; offer a choice if dirty).
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    try {
-      listen<string[]>("file-changed", async (ev) => {
-        const { root, activePath, dirty } = useStore.getState();
-        if (!root || !activePath) return;
-        // The Rust watcher emits native paths (backslashes on Windows); normalize
-        // separators on both sides so the comparison matches cross-platform.
-        const abs = `${root}/${activePath}`;
-        const normalize = (p: string): string => p.replace(/\\/g, "/");
-        const absNorm = normalize(abs);
-        if (!ev.payload.some((p) => normalize(p) === absNorm)) return;
-        if (dirty) {
-          toast.warning("This file changed on disk.", {
-            description: "You have unsaved edits.",
-            action: {
-              label: "Reload (discard mine)",
-              onClick: () => {
-                void reloadActive();
-              },
-            },
-            cancel: {
-              label: "Keep mine",
-              onClick: () => undefined, // dismiss; local edits are preserved
-            },
-          });
-          return;
-        }
-        await reloadActive();
-      })
-        .then((un) => {
-          // Effect already cleaned up before listen resolved: detach immediately.
-          if (cancelled) un();
-          else unlisten = un;
-        })
-        .catch(() => {
-          // listen() rejects when the Tauri runtime is unavailable (e.g. a plain
-          // browser for dev/QA); live reload is disabled rather than crashing.
-        });
-    } catch {
-      // Defensive: a synchronous failure also just disables live reload.
-    }
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [reloadActive]);
-
-  // Open files handed to us by the OS (default-app / file association on macOS,
-  // `open file.md`). Drain any path buffered before the webview mounted, then
-  // listen for opens that arrive while we're already running. Declared after the
-  // watcher so its listen() resolves first; mirrors the same defensive guards so
-  // a missing Tauri runtime (plain-browser QA) disables OS-open instead of
-  // crashing.
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    void takePendingOpen()
-      .then((paths) => {
-        if (paths[0]) void openFileByPath(paths[0]);
-      })
-      .catch(() => {});
-    try {
-      listen<string[]>("open-files", (ev) => {
-        if (ev.payload?.[0]) void openFileByPath(ev.payload[0]);
-      })
-        .then((un) => {
-          if (cancelled) un();
-          else unlisten = un;
-        })
-        .catch(() => {});
-    } catch {
-      // Defensive: a synchronous failure also just disables OS-open.
-    }
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [openFileByPath]);
+  useOsOpen(openFileByPath);
 
   const folderName = s.root ? (s.root.split(/[/\\]/).filter(Boolean).pop() ?? null) : null;
 
@@ -315,15 +188,11 @@ export default function App(): React.ReactElement {
         <Suspense fallback={null}>
           <SearchPanel
             open
-            hits={searchHits}
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
-            onPick={onSearchPick}
-            onClose={() => {
-              void registry.runCommand("search.close");
-              setSearchQuery("");
-              setSearchHits([]);
-            }}
+            hits={search.hits}
+            query={search.query}
+            onQueryChange={search.setQuery}
+            onPick={search.pick}
+            onClose={search.close}
           />
         </Suspense>
       )}

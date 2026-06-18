@@ -158,3 +158,21 @@ export function useActivePanel(): string | null {
     () => registry.activePanel(),
   );
 }
+
+// Pure: does a "mod+shift+key" binding match this keydown? `mod` = ⌘ or Ctrl.
+// A modifier absent from the binding must be absent from the event, so "mod+k"
+// does not fire on ⌘⇧K. Powers the single app-wide keybinding dispatcher.
+export function matchesBinding(binding: string, e: KeyboardEvent): boolean {
+  const parts = binding.toLowerCase().split("+");
+  const key = parts.at(-1);
+  if (!key) return false;
+  const wantMod = parts.includes("mod");
+  const wantShift = parts.includes("shift");
+  const wantAlt = parts.includes("alt");
+  return (
+    (e.metaKey || e.ctrlKey) === wantMod &&
+    e.shiftKey === wantShift &&
+    e.altKey === wantAlt &&
+    e.key.toLowerCase() === key
+  );
+}

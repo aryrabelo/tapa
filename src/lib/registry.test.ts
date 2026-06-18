@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRegistry } from "@/lib/registry";
+import { createRegistry, matchesBinding } from "@/lib/registry";
 import type { Module } from "@/lib/registry";
 
 function makeModule(over: Partial<Module> = {}): Module {
@@ -71,5 +71,23 @@ describe("registry", () => {
     reg.deactivate("search");
     expect(off).toHaveBeenCalledTimes(1);
     reg.emit("x", 1); // subscription torn down — no throw, no handler
+  });
+});
+
+describe("matchesBinding", () => {
+  const ev = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
+  it("matches mod+shift+key for ⌘⇧F and Ctrl+Shift+F", () => {
+    expect(matchesBinding("mod+shift+f", ev({ key: "F", metaKey: true, shiftKey: true }))).toBe(
+      true,
+    );
+    expect(matchesBinding("mod+shift+f", ev({ key: "f", ctrlKey: true, shiftKey: true }))).toBe(
+      true,
+    );
+  });
+  it("rejects missing or extra modifiers", () => {
+    expect(matchesBinding("mod+shift+f", ev({ key: "f", metaKey: true }))).toBe(false); // no shift
+    expect(matchesBinding("mod+k", ev({ key: "k", metaKey: true }))).toBe(true);
+    expect(matchesBinding("mod+k", ev({ key: "k", metaKey: true, shiftKey: true }))).toBe(false); // extra shift
+    expect(matchesBinding("mod+k", ev({ key: "k" }))).toBe(false); // no mod
   });
 });
