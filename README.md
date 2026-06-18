@@ -1,10 +1,35 @@
+<div align="center">
+
+<img src="docs/banner.png" alt="Tapa" />
+
 # Tapa
 
-A fast, minimal, Rust-based Markdown reader and editor built with Tauri + React.
+[![Latest release](https://img.shields.io/github/v/release/aryrabelo/tapa?sort=semver&label=release)](https://github.com/aryrabelo/tapa/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-555)
+![Built with Tauri + React](https://img.shields.io/badge/built%20with-Tauri%20%2B%20React-24C8DB)
 
-> Reader-first Markdown. Native desktop, ~4 MB download, boots instantly.
+**A fast, minimal, Rust-based Markdown reader and editor — reader-first, native desktop, ~5 MB download, boots instantly.**
 
-## The idea
+⭐ Star Tapa on GitHub — it's a one-person project and every star helps.
+
+</div>
+
+## Table of contents
+
+- [💡 The idea](#-the-idea)
+- [✨ Features](#-features)
+- [⌨️ Keyboard shortcuts](#️-keyboard-shortcuts)
+- [📦 Install](#-install)
+- [🛠️ How it's built](#️-how-its-built)
+- [🗂️ Project layout](#️-project-layout)
+- [✅ Verification](#-verification)
+- [📛 Naming](#-naming)
+- [🚫 Non-goals (v1)](#-non-goals-v1)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+
+## 💡 The idea
 
 Tapa is **reader-first**. You point it at a folder of Markdown and you _read_ —
 clean, rendered prose, nothing in the way. Editing is on demand, not the default
@@ -18,7 +43,7 @@ bloat. The heavy machinery (editor engine, Markdown renderer, command palette)
 is loaded only when you actually use it, so the app opens cold with a fraction
 of the usual web-app weight.
 
-## Features
+## ✨ Features
 
 - **Reader-first rendering** — open a folder (a "vault") and read rendered
   Markdown. CommonMark + GFM: headings, lists, bold/italic, links, images,
@@ -27,16 +52,22 @@ of the usual web-app weight.
   clicked position (CodeMirror); double-click again to return to the reader.
 - **Collapsible file tree** — sidebar with the folder tree; toggle with `⌘B`.
 - **Fuzzy file finder** — `⌘K` to jump between files by name.
-- **Content search** — `⌘⇧F` to search inside files; matches stream in grouped
-  by file with the match highlighted, and `Enter` jumps to the line.
+- **Content search** — `⌘⇧F` to search inside files; matches stream in from Rust
+  grouped by file with the match highlighted, and `Enter` jumps to the line.
 - **Live reload** — external changes on disk reload automatically; if you have
   unsaved edits, Tapa asks before discarding them.
 - **OS-native theme** — follows your system light/dark appearance, with a manual
   light / dark / system toggle.
 - **Open a folder or a single file** — single files are scoped to their parent
   so save and watch keep working.
+- **macOS file association** — register Tapa as a reader for `.md` / `.markdown`.
 
-## Keyboard shortcuts
+> [!TIP]
+> Reach for `⌘⇧F` when you don't remember _which_ file said it. Content search
+> streams matches from Rust grouped by file; press `Enter` on a match to jump
+> straight to that line.
+
+## ⌨️ Keyboard shortcuts
 
 | Shortcut | Action |
 | --- | --- |
@@ -46,29 +77,30 @@ of the usual web-app weight.
 | `⌘S` / `Ctrl-S` | Save and return to the reader |
 | Double-click | Enter edit mode at that position / exit edit mode |
 
-## Install
+## 📦 Install
 
-Tapa runs on macOS, Linux, and Windows. Download a prebuilt installer, or build
-from source — both work the same on all three platforms.
+Tapa runs on macOS, Linux, and Windows. Download a small native installer
+or build from source — both work the same on all three platforms.
 
 ### Download a prebuilt installer
 
 Grab the file for your platform from the
-[**Releases**](https://github.com/aryrabelo/tapa/releases/latest) page:
+[**latest release**](https://github.com/aryrabelo/tapa/releases/latest):
 
-| Platform | Download | Install |
-| --- | --- | --- |
-| macOS | the `.dmg` (Apple Silicon `aarch64` or Intel `x64`) | Open it, drag **Tapa** to Applications. |
-| Linux | the `.AppImage` | `chmod +x Tapa_*.AppImage && ./Tapa_*.AppImage` |
-| Linux (Debian/Ubuntu) | the `.deb` | `sudo apt install ./Tapa_*.deb` |
-| Windows | the `.exe` or `.msi` | Run the installer. |
+| Platform | Download | Size | Install |
+| --- | --- | --- | --- |
+| macOS | `.dmg` (Apple Silicon `aarch64` / Intel `x64`) | ~5 MB | Open it, drag **Tapa** to Applications. |
+| Linux | `.AppImage` | ~74 MB | `chmod +x Tapa_*.AppImage && ./Tapa_*.AppImage` |
+| Linux (Debian/Ubuntu) | `.deb` | ~2.4 MB | `sudo apt install ./Tapa_*.deb` |
+| Linux (Fedora/RHEL) | `.rpm` | ~2.4 MB | `sudo rpm -i Tapa_*.rpm` |
+| Windows | `.exe` / `.msi` | ~2 MB | Run the installer. |
 
+_The Linux `.AppImage` bundles its own runtime (~74 MB); the `.deb` / `.rpm` use system libraries (~2.4 MB)._
+
+> [!NOTE]
 > The app is currently unsigned, so the OS warns on first launch: on macOS use
 > right-click → **Open** to get past Gatekeeper; on Windows click
 > **More info → Run anyway** in SmartScreen. Code signing is planned.
-
-> **Note:** the first tagged release has not been published yet. Until it is,
-> [build from source](#build-from-source) below.
 
 ### Build from source
 
@@ -88,15 +120,15 @@ npm run tauri build
 
 The packaged app is written to
 `src-tauri/target/release/bundle/` (`.app` / `.dmg` on macOS, `.deb` /
-`.AppImage` on Linux, `.msi` / `.exe` on Windows).
+`.AppImage` / `.rpm` on Linux, `.msi` / `.exe` on Windows).
 
-### Run in development
+#### Run in development
 
 ```sh
 npm run tauri dev
 ```
 
-## How it's built
+## 🛠️ How it's built
 
 Tapa is a thin native shell around a web frontend:
 
@@ -106,12 +138,12 @@ Tapa is a thin native shell around a web frontend:
   and a filesystem watcher for live reload. No business logic lives in Rust.
 - **Startup budget** — the boot bundle is aggressively code-split. The editor
   (CodeMirror), the Markdown renderer, the command palette, the sidebar, and
-  toasts each load on demand instead of at startup. The result: the eager
-  JS+CSS the webview parses at launch is about **34 KB gzip** — a fraction of a
-  typical web-app boot bundle — while the heavy chunks stream in only when a
-  feature is first used.
+  toasts each load on demand instead of at startup. The result: the eager bundle
+  the webview parses at launch is about **~27 KB gzip JS + ~9 KB gzip CSS** — a
+  fraction of a typical web-app boot bundle — while the heavy chunks stream in
+  only when a feature is first used.
 
-## Project layout
+## 🗂️ Project layout
 
 ```
 src/             React frontend
@@ -122,7 +154,7 @@ src/             React frontend
 src-tauri/       Rust backend (file I/O, folder scan, file watcher)
 ```
 
-## Verification
+## ✅ Verification
 
 ```sh
 npm run test            # Vitest unit tests
@@ -131,7 +163,7 @@ npm run build           # tsc + Vite production build
 cd src-tauri && cargo test
 ```
 
-## Naming
+## 📛 Naming
 
 **Tapa** is chosen for its double meaning:
 
@@ -153,7 +185,7 @@ cd src-tauri && cargo test
 The product name, the bundle identifier (`com.aryrabelo.tapa`), and the window
 title are all `Tapa`. The Rust crate is still named `app` internally.
 
-## Non-goals (v1)
+## 🚫 Non-goals (v1)
 
 - No syntax highlighting in code blocks
 - No math (KaTeX)
@@ -163,7 +195,7 @@ title are all `Tapa`. The Rust crate is still named `app` internally.
 - No multi-window
 - No cloud / sync
 
-## Contributing
+## 🤝 Contributing
 
 Bug reports, feature ideas, and pull requests are welcome. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up the project, the
@@ -171,6 +203,6 @@ verification steps a change must pass, and the scope this project keeps (see
 **Non-goals** above). Security issues: please follow
 [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
-## License
+## 📄 License
 
 [MIT](LICENSE) © Ary Rabelo
