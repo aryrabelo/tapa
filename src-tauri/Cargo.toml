@@ -32,3 +32,12 @@ memchr = "2"
 
 [dev-dependencies]
 tempfile = "3"
+
+# Size-optimized release build (the bundled binary is the download weight).
+# Tauri-recommended profile: ~30-45% smaller than the default release build.
+[profile.release]
+opt-level = "s"   # optimize for size (negligible runtime cost for an I/O-bound app)
+lto = true        # link-time optimization across crates
+codegen-units = 1 # maximize cross-unit optimization (slower build, smaller binary)
+panic = "abort"   # drop unwinding tables
+strip = true      # strip debug symbols

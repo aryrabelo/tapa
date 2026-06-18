@@ -22,6 +22,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so save and watch keep working.
 - macOS file association: register Tapa as a reader for `.md` / `.markdown`.
 
+### Changed
+- Size-optimized release build profile (`opt-level=s`, LTO, `codegen-units=1`,
+  `panic=abort`, `strip`): the release binary is ~53% smaller (11.6 MB → 5.5 MB),
+  shrinking the installers accordingly.
+
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
