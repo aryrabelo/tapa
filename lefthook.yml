@@ -1,0 +1,27 @@
+# Lefthook — runs the same gate as CI before a push, so lint/test/build
+# regressions are caught locally instead of on the runner.
+#
+# Note: platform-specific breaks (e.g. a macOS-gated API that fails to compile
+# on Linux/Windows) are NOT caught here — the hook runs only on your platform.
+# That is what the cross-platform CI matrix (.github/workflows/ci.yml) is for.
+#
+# Bypass in an emergency with `git push --no-verify` (avoid — CI will still run).
+
+pre-push:
+  piped: true # run in order, stop at the first failure
+  commands:
+    1_frontend_build:
+      run: npm run build
+    2_frontend_lint:
+      run: npm run lint
+    3_frontend_test:
+      run: npm run test
+    4_rust_fmt:
+      root: "src-tauri/"
+      run: cargo fmt --all -- --check
+    5_rust_clippy:
+      root: "src-tauri/"
+      run: cargo clippy --all-targets --all-features -- -D warnings
+    6_rust_test:
+      root: "src-tauri/"
+      run: cargo test --all-features
