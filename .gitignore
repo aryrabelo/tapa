@@ -8,6 +8,11 @@ dist-ssr/
 # Tauri / Rust build artifacts
 src-tauri/target/
 
+# Local env / secrets — never commit
+.env
+.env.*
+!.env.example
+
 # Logs
 *.log
 npm-debug.log*

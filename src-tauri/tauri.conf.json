@@ -43,6 +43,14 @@
         "mimeType": "text/markdown"
       }
     ],
+    "macOS": {
+      "dmg": {
+        "background": "dmg-background.png",
+        "windowSize": { "width": 560, "height": 400 },
+        "appPosition": { "x": 160, "y": 160 },
+        "applicationFolderPosition": { "x": 400, "y": 160 }
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
