@@ -4,7 +4,7 @@ mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use tauri::{Emitter, Manager};
+    use tauri::Manager;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -29,21 +29,25 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            // macOS delivers file-association / `open file.md` launches as an
-            // Opened event (possibly before the webview is ready). Buffer the
-            // paths so the frontend can drain them on mount, and also emit so a
-            // running instance opens the file immediately.
-            if let tauri::RunEvent::Opened { urls } = event {
+        .run(|_app_handle, _event| {
+            // macOS/iOS deliver file-association / `open file.md` launches as a
+            // RunEvent::Opened (possibly before the webview is ready). That
+            // variant only exists on Apple targets, so gate the whole handler —
+            // on Linux/Windows the enum has no such variant. Buffer the paths so
+            // the frontend can drain them on mount, and emit so a running
+            // instance opens the file immediately.
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                use tauri::Emitter;
                 let paths: Vec<String> = urls
                     .iter()
                     .filter_map(|u| u.to_file_path().ok())
                     .map(|p| p.to_string_lossy().into_owned())
                     .collect();
                 if !paths.is_empty() {
-                    let state = app_handle.state::<commands::PendingOpen>();
+                    let state = _app_handle.state::<commands::PendingOpen>();
                     state.0.lock().extend(paths.iter().cloned());
-                    let _ = app_handle.emit("open-files", paths);
+                    let _ = _app_handle.emit("open-files", paths);
                 }
             }
         });
