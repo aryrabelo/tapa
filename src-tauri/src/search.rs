@@ -27,8 +27,9 @@ pub fn smart_case_insensitive(query: &str) -> bool {
 pub enum Matcher {
     /// Case-sensitive literal — fastest path.
     LiteralCs(memchr::memmem::Finder<'static>),
-    /// Case-insensitive literal OR regex mode.
-    Re(regex::Regex),
+    /// Case-insensitive literal OR regex mode. Boxed: a Regex is far larger than
+    /// a Finder, and an unboxed variant trips clippy::large_enum_variant.
+    Re(Box<regex::Regex>),
 }
 
 impl Matcher {
@@ -38,13 +39,13 @@ impl Matcher {
             regex::RegexBuilder::new(query)
                 .case_insensitive(ci)
                 .build()
-                .map(Matcher::Re)
+                .map(|re| Matcher::Re(Box::new(re)))
                 .map_err(|e| e.to_string())
         } else if ci {
             regex::RegexBuilder::new(&regex::escape(query))
                 .case_insensitive(true)
                 .build()
-                .map(Matcher::Re)
+                .map(|re| Matcher::Re(Box::new(re)))
                 .map_err(|e| e.to_string())
         } else {
             Ok(Matcher::LiteralCs(
