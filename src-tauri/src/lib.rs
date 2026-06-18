@@ -4,8 +4,6 @@ mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use tauri::Manager;
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -38,7 +36,7 @@ pub fn run() {
             // instance opens the file immediately.
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             if let tauri::RunEvent::Opened { urls } = _event {
-                use tauri::Emitter;
+                use tauri::{Emitter, Manager};
                 let paths: Vec<String> = urls
                     .iter()
                     .filter_map(|u| u.to_file_path().ok())
