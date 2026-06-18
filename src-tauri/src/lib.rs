@@ -1,5 +1,6 @@
 mod commands;
 mod fs_tree;
+mod search;
 mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +24,7 @@ pub fn run() {
             commands::read_file,
             commands::write_file,
             commands::take_pending_open,
+            commands::search_content,
             watcher::watch_folder
         ])
         .build(tauri::generate_context!())

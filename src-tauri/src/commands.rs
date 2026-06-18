@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+use crate::search::{search_dir, Hit, SearchOpts};
+use tauri::ipc::Channel;
+
 const MAX_BYTES: u64 = 5 * 1024 * 1024; // 5 MB guard
 
 /// Buffer of file paths the OS asked us to open (file-association launch /
@@ -33,6 +36,25 @@ pub fn read_file(path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn write_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(PathBuf::from(&path), content).map_err(|e| e.to_string())
+}
+
+/// Stream content-search hits to the frontend over a Channel. Returns
+/// immediately; the walk runs on a background thread and stops when the
+/// Channel is closed (frontend cancellation / superseded query).
+#[tauri::command]
+pub fn search_content(
+    root: String,
+    query: String,
+    regex: bool,
+    on_hit: Channel<Hit>,
+) -> Result<(), String> {
+    let opts = SearchOpts { regex };
+    std::thread::spawn(move || {
+        let _ = search_dir(std::path::Path::new(&root), &query, &opts, &mut |hit| {
+            on_hit.send(hit).is_ok() // false once the channel is closed -> stop
+        });
+    });
+    Ok(())
 }
 
 #[cfg(test)]

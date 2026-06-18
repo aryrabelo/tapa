@@ -1,11 +1,19 @@
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-fn is_hidden(e: &DirEntry) -> bool {
+pub(crate) fn is_hidden(e: &DirEntry) -> bool {
     e.file_name()
         .to_str()
         .map(|s| s.starts_with('.'))
         .unwrap_or(false)
+}
+
+/// True for `.md` / `.markdown` files. Shared by the tree scan and search walk.
+pub(crate) fn is_markdown(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("md") | Some("markdown")
+    )
 }
 
 /// Returns markdown file paths relative to `root`, using forward slashes, sorted.
@@ -16,12 +24,7 @@ pub fn scan_markdown(root: &Path) -> Vec<String> {
         .filter_entry(|e| e.depth() == 0 || !is_hidden(e))
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
-        .filter(|e| {
-            matches!(
-                e.path().extension().and_then(|s| s.to_str()),
-                Some("md") | Some("markdown")
-            )
-        })
+        .filter(|e| is_markdown(e.path()))
         .filter_map(|e| e.path().strip_prefix(root).ok().map(|p| p.to_path_buf()))
         .map(|p| {
             p.components()
