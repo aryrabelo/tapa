@@ -27,6 +27,8 @@ of the usual web-app weight.
   clicked position (CodeMirror); double-click again to return to the reader.
 - **Collapsible file tree** — sidebar with the folder tree; toggle with `⌘B`.
 - **Fuzzy file finder** — `⌘K` to jump between files by name.
+- **Content search** — `⌘⇧F` to search inside files; matches stream in grouped
+  by file with the match highlighted, and `Enter` jumps to the line.
 - **Live reload** — external changes on disk reload automatically; if you have
   unsaved edits, Tapa asks before discarding them.
 - **OS-native theme** — follows your system light/dark appearance, with a manual
@@ -39,6 +41,7 @@ of the usual web-app weight.
 | Shortcut | Action |
 | --- | --- |
 | `⌘K` / `Ctrl-K` | Open the fuzzy file finder |
+| `⌘⇧F` / `Ctrl-Shift-F` | Search inside files (content) |
 | `⌘B` / `Ctrl-B` | Toggle the sidebar |
 | `⌘S` / `Ctrl-S` | Save and return to the reader |
 | Double-click | Enter edit mode at that position / exit edit mode |

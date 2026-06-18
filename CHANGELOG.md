@@ -12,6 +12,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   position (CodeMirror); double-click again to return to the reader.
 - Collapsible file tree with a sidebar toggle (`⌘B` / `Ctrl-B`).
 - Fuzzy file finder (`⌘K` / `Ctrl-K`).
+- Content search (`⌘⇧F` / `Ctrl-Shift-F`): streams matches from Rust grouped by
+  file with line snippets and match highlight; `Enter` jumps to the line. Built
+  as the first module on a new in-process module registry (extensibility seam).
 - Live reload of external on-disk changes, with a prompt before discarding
   unsaved edits.
 - OS-native light/dark theme with a manual light / dark / system toggle.
