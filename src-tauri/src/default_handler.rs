@@ -43,8 +43,10 @@ mod imp {
         // (Create) ownership rule, so wrap_under_create_rule takes the +1 retain
         // and releases it on drop. A null result means "no registered handler".
         unsafe {
-            let handler_ref =
-                LSCopyDefaultRoleHandlerForContentType(uti.as_concrete_TypeRef(), K_LS_ROLES_EDITOR);
+            let handler_ref = LSCopyDefaultRoleHandlerForContentType(
+                uti.as_concrete_TypeRef(),
+                K_LS_ROLES_EDITOR,
+            );
             if handler_ref.is_null() {
                 return false;
             }
