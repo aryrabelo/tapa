@@ -24,11 +24,14 @@ pub fn smart_case_insensitive(query: &str) -> bool {
     !query.chars().any(|c| c.is_uppercase())
 }
 
+// Both variants are boxed so neither dominates the enum size: a Regex and a
+// memchr Finder are both large (the Finder holds precomputed tables ~288 B),
+// and an unboxed large variant trips clippy::large_enum_variant. The matcher is
+// built once per search, so the extra indirection is free.
 pub enum Matcher {
     /// Case-sensitive literal — fastest path.
-    LiteralCs(memchr::memmem::Finder<'static>),
-    /// Case-insensitive literal OR regex mode. Boxed: a Regex is far larger than
-    /// a Finder, and an unboxed variant trips clippy::large_enum_variant.
+    LiteralCs(Box<memchr::memmem::Finder<'static>>),
+    /// Case-insensitive literal OR regex mode.
     Re(Box<regex::Regex>),
 }
 
@@ -48,9 +51,9 @@ impl Matcher {
                 .map(|re| Matcher::Re(Box::new(re)))
                 .map_err(|e| e.to_string())
         } else {
-            Ok(Matcher::LiteralCs(
+            Ok(Matcher::LiteralCs(Box::new(
                 memchr::memmem::Finder::new(query.as_bytes()).into_owned(),
-            ))
+            )))
         }
     }
 
