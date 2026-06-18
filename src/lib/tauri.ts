@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
 export const scanTree = (root: string): Promise<string[]> =>
@@ -21,4 +21,25 @@ export async function pickFile(): Promise<string | null> {
     filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
   });
   return typeof sel === "string" ? sel : null;
+}
+
+export interface SearchHit {
+  path: string; // relative path, forward slashes
+  line: number; // 1-based
+  col: number; // 0-based byte column within the line
+  snippet: string;
+}
+
+// Streams hits via a Channel. Resolves once the walk is launched; hits arrive
+// on `onHit`. A new search (new channel) or GC of this one closes the prior
+// channel, which stops the Rust walk.
+export function searchContent(
+  root: string,
+  query: string,
+  opts: { regex: boolean },
+  onHit: (hit: SearchHit) => void,
+): Promise<void> {
+  const channel = new Channel<SearchHit>();
+  channel.onmessage = onHit;
+  return invoke<void>("search_content", { root, query, regex: opts.regex, onHit: channel });
 }

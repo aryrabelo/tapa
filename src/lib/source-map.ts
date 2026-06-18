@@ -51,3 +51,18 @@ export function sourceOffsetFromPoint(x: number, y: number): number | null {
   const text = node?.textContent ?? "";
   return resolveSourceOffset({ soStart: span.soStart, text }, offset);
 }
+
+// Pure: char offset of the start of 1-based `line` in `text`. Lines past the
+// end clamp to the last line's start. Used to scroll the reader to a search hit.
+export function lineStartOffset(text: string, line: number): number {
+  if (line <= 1) return 0;
+  let offset = 0;
+  let seen = 1;
+  while (seen < line) {
+    const nl = text.indexOf("\n", offset);
+    if (nl === -1) return offset; // clamp: no more lines
+    offset = nl + 1;
+    seen++;
+  }
+  return offset;
+}

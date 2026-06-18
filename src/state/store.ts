@@ -12,6 +12,7 @@ interface AppState {
   mode: Mode;
   dirty: boolean;
   editOffset: number | null; // source offset to place the cursor on edit entry
+  scrollLine: number | null; // 1-based line the reader should scroll to (search jump)
 
   setFolder: (root: string, files: string[]) => void;
   setActive: (path: string, content: string) => void;
@@ -19,6 +20,7 @@ interface AppState {
   enterEdit: (offset: number) => void;
   exitEdit: () => void;
   markSaved: () => void;
+  setScrollLine: (line: number | null) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -30,12 +32,21 @@ export const useStore = create<AppState>((set) => ({
   mode: "reader",
   dirty: false,
   editOffset: null,
+  scrollLine: null,
 
   setFolder: (root, files) => set({ root, files, tree: buildTree(files) }),
   setActive: (path, content) =>
-    set({ activePath: path, content, mode: "reader", dirty: false, editOffset: null }),
+    set({
+      activePath: path,
+      content,
+      mode: "reader",
+      dirty: false,
+      editOffset: null,
+      scrollLine: null,
+    }),
   setContent: (content) => set({ content, dirty: true }),
   enterEdit: (offset) => set({ mode: "edit", editOffset: offset }),
   exitEdit: () => set({ mode: "reader", editOffset: null }),
   markSaved: () => set({ dirty: false }),
+  setScrollLine: (scrollLine) => set({ scrollLine }),
 }));
