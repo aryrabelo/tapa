@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-18
+
+### Changed
+- The default webview right-click menu is now suppressed in the reader; native
+  menus are kept in editable fields (search inputs, the editor). A custom in-app
+  context menu is planned.
+- macOS DMG: a custom installer background; the volume-icon helper file no longer
+  shows in the mount window.
+
 ## [0.2.0] - 2026-06-18
 
 ### Added
@@ -37,6 +46,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
-[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/aryrabelo/tapa/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/aryrabelo/tapa/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/aryrabelo/tapa/releases/tag/v0.1.0
