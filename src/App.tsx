@@ -10,12 +10,16 @@ import {
   pickFolder,
   readFile,
   scanTree,
+  searchContent,
   takePendingOpen,
   watchFolder,
   writeFile,
+  type SearchHit,
 } from "@/lib/tauri";
 import { onToasterNeeded, toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
+import { registry, useActivePanel } from "@/lib/registry";
+import { searchModule } from "@/modules/search";
 
 // codemirror (~169KB gzip) is only used in edit mode. Load it on demand so the
 // reader-first startup bundle stays lean (smaller webview memory + faster boot).
@@ -37,6 +41,14 @@ const AppSidebar = lazy(() =>
 
 // sonner's <Toaster> (~9KB gzip) is mounted on first toast, not at startup.
 const Toaster = lazy(() => import("sonner").then((m) => ({ default: m.Toaster })));
+
+// Search is the first registry module; register it once at module load so the
+// ⌘⇧F command exists eagerly. The panel body is lazy-loaded on first open.
+registry.register(searchModule);
+
+const SearchPanel = lazy(() =>
+  import("@/modules/search/SearchPanel").then((m) => ({ default: m.SearchPanel })),
+);
 
 export default function App(): React.ReactElement {
   const s = useStore();
@@ -66,6 +78,44 @@ export default function App(): React.ReactElement {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Content search (⌘⇧F) — a registry-driven overlay streaming hits from Rust.
+  const activePanelId = useActivePanel();
+  const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        void registry.runCommand("search.open");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Debounced streaming search against the open root. A superseded query drops
+  // its in-flight hits (alive flag) and lets the prior Channel be GC'd, which
+  // stops the Rust walk; results are capped at 100 rows.
+  useEffect(() => {
+    const { root } = useStore.getState();
+    if (!root || !searchQuery) {
+      setSearchHits([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(() => {
+      setSearchHits([]);
+      void searchContent(root, searchQuery, { regex: false }, (hit) => {
+        if (alive) setSearchHits((prev) => (prev.length >= 100 ? prev : [...prev, hit]));
+      });
+    }, 150);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [searchQuery]);
 
   async function openFolder() {
     const root = await pickFolder();
@@ -125,6 +175,15 @@ export default function App(): React.ReactElement {
     } catch (e) {
       toast.error(String(e));
     }
+  }
+
+  // Open a search hit: load its file, then ask the reader to scroll to the line.
+  async function onSearchPick(hit: SearchHit) {
+    await openFile(hit.path);
+    useStore.getState().setScrollLine(hit.line);
+    void registry.runCommand("search.close");
+    setSearchQuery("");
+    setSearchHits([]);
   }
 
   async function save(): Promise<boolean> {
@@ -252,6 +311,22 @@ export default function App(): React.ReactElement {
         </Suspense>
       )}
       <CommandPalette files={s.files} onPick={openFile} />
+      {activePanelId === "search" && (
+        <Suspense fallback={null}>
+          <SearchPanel
+            open
+            hits={searchHits}
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            onPick={onSearchPick}
+            onClose={() => {
+              void registry.runCommand("search.close");
+              setSearchQuery("");
+              setSearchHits([]);
+            }}
+          />
+        </Suspense>
+      )}
       {s.tree.length > 0 && sidebarOpen && (
         <Suspense fallback={null}>
           <AppSidebar tree={s.tree} active={s.activePath} onPick={openFile} />
