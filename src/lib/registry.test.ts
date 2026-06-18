@@ -91,3 +91,21 @@ describe("matchesBinding", () => {
     expect(matchesBinding("mod+k", ev({ key: "k" }))).toBe(false); // no mod
   });
 });
+
+describe("runKeybinding", () => {
+  const ev = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
+  it("runs the command whose keybinding matches and returns whether it matched", async () => {
+    const run = vi.fn();
+    const reg = createRegistry();
+    reg.register(
+      makeModule({
+        id: "m",
+        register: (r) => r.command({ id: "c", title: "C", keybinding: "mod+shift+f", run }),
+      }),
+    );
+    expect(reg.runKeybinding(ev({ key: "f", metaKey: true, shiftKey: true }))).toBe(true);
+    expect(reg.runKeybinding(ev({ key: "g", metaKey: true, shiftKey: true }))).toBe(false);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+});

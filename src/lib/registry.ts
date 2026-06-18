@@ -44,6 +44,7 @@ export interface Registry {
   getPanel(id: string): PanelSpec | undefined;
   activePanel(): string | null;
   subscribePanel(cb: () => void): Disposer;
+  runKeybinding(e: KeyboardEvent): boolean;
 }
 
 export function createRegistry(): Registry {
@@ -143,6 +144,18 @@ export function createRegistry(): Registry {
       return () => {
         panelSubs.delete(cb);
       };
+    },
+    runKeybinding(e) {
+      for (const entry of commands.values()) {
+        if (entry.cmd.keybinding && matchesBinding(entry.cmd.keybinding, e)) {
+          void (async () => {
+            await activate(entry.moduleId);
+            await entry.cmd.run(ctxFor(entry.moduleId));
+          })();
+          return true;
+        }
+      }
+      return false;
     },
   };
 }

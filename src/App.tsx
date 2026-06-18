@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { pickFile, pickFolder, readFile, scanTree, watchFolder, writeFile } from "@/lib/tauri";
 import { onToasterNeeded, toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
-import { matchesBinding, registry, useActivePanel } from "@/lib/registry";
+import { registry, useActivePanel } from "@/lib/registry";
 import { searchModule } from "@/modules/search";
 import { useSearch } from "@/modules/search/useSearch";
 import { useFileWatcher } from "@/lib/useFileWatcher";
@@ -75,17 +75,13 @@ export default function App(): React.ReactElement {
   const search = useSearch(openFile);
   useFileWatcher();
 
-  // One app-wide keybinding dispatcher: routes a registered command's
-  // `keybinding` to the registry. Replaces per-feature keydown effects.
+  // One app-wide keybinding dispatcher: routes a registered command's keybinding
+  // through the registry. Plain typing (no ⌘/Ctrl) early-returns, so the hot
+  // editor path costs one boolean — no per-keystroke allocation or scan.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      for (const cmd of registry.commands()) {
-        if (cmd.keybinding && matchesBinding(cmd.keybinding, e)) {
-          e.preventDefault();
-          void registry.runCommand(cmd.id);
-          return;
-        }
-      }
+      if (!e.metaKey && !e.ctrlKey) return;
+      if (registry.runKeybinding(e)) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
