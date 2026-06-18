@@ -1,10 +1,11 @@
 import type * as React from "react";
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import { markdownComponents } from "./components";
 import { lineStartOffset, sourceOffsetFromPoint } from "@/lib/source-map";
+import { registry } from "@/lib/registry";
 import { useStore } from "@/state/store";
 
 export function Reader({
@@ -32,9 +33,17 @@ export function Reader({
     best?.scrollIntoView({ block: "start" });
     useStore.getState().setScrollLine(null);
   }, [scrollLine, content]);
+
+  // After every render, let modules augment the rendered blocks (presentation,
+  // live-write, future plugins). Keyed on content so re-renders re-fire the hook.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-fire on each content render
+  useEffect(() => {
+    if (containerRef.current) registry.emitReaderRender(containerRef.current);
+  }, [content]);
   return (
     <article
       ref={containerRef}
+      data-reader=""
       className="mx-auto max-w-[680px] px-8 py-14 font-serif text-[1.125rem] leading-[1.75] text-foreground"
       onDoubleClick={(e) => {
         const off = sourceOffsetFromPoint(e.clientX, e.clientY);

@@ -8,6 +8,10 @@ export const writeFile = (path: string, content: string): Promise<void> =>
   invoke<void>("write_file", { path, content });
 export const watchFolder = (root: string): Promise<void> => invoke<void>("watch_folder", { root });
 export const takePendingOpen = (): Promise<string[]> => invoke<string[]>("take_pending_open");
+export const isDefaultMarkdownHandler = (): Promise<boolean> =>
+  invoke<boolean>("is_default_markdown_handler");
+export const setDefaultMarkdownHandler = (): Promise<void> =>
+  invoke<void>("set_default_markdown_handler");
 
 export async function pickFolder(): Promise<string | null> {
   const sel = await open({ directory: true, multiple: false });

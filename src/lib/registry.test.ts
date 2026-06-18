@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createRegistry, matchesBinding } from "@/lib/registry";
-import type { Module } from "@/lib/registry";
+import type { Disposer, Module, ReaderContext } from "@/lib/registry";
 
 function makeModule(over: Partial<Module> = {}): Module {
   return {
@@ -107,5 +107,101 @@ describe("runKeybinding", () => {
     expect(reg.runKeybinding(ev({ key: "g", metaKey: true, shiftKey: true }))).toBe(false);
     await new Promise((r) => setTimeout(r, 0));
     expect(run).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("context-menu items", () => {
+  const ctx = (over: Partial<ReaderContext> = {}): ReaderContext => ({
+    element: document.createElement("div"),
+    sourceOffset: null,
+    line: null,
+    selection: "",
+    path: null,
+    ...over,
+  });
+
+  it("registerContextMenuItem exposes items filtered by when(ctx)", async () => {
+    const reg = createRegistry();
+    reg.register(
+      makeModule({
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (c) => {
+          c.registerContextMenuItem({ id: "always", label: "Always", run: () => {} });
+          c.registerContextMenuItem({
+            id: "selection",
+            label: "On selection",
+            when: (rc) => rc.selection.length > 0,
+            run: () => {},
+          });
+        },
+      }),
+    );
+    await reg.activate("m");
+    expect(reg.contextMenuItems(ctx()).map((i) => i.id)).toEqual(["always"]);
+    expect(reg.contextMenuItems(ctx({ selection: "hi" })).map((i) => i.id)).toEqual([
+      "always",
+      "selection",
+    ]);
+  });
+
+  it("runs an item's run with the supplied reader context", async () => {
+    const run = vi.fn();
+    const reg = createRegistry();
+    reg.register(
+      makeModule({
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (c) => {
+          c.registerContextMenuItem({ id: "go", label: "Go", run });
+        },
+      }),
+    );
+    await reg.activate("m");
+    const rc = ctx({ path: "a.md", line: 4 });
+    reg.contextMenuItems(rc)[0].run(rc);
+    expect(run).toHaveBeenCalledWith(rc);
+  });
+});
+
+describe("reader render hook", () => {
+  it("invokes callbacks on emit and immediately with the last container", async () => {
+    const reg = createRegistry();
+    const seen: HTMLElement[] = [];
+    reg.register(
+      makeModule({
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (c) => {
+          c.onReaderRender((el) => seen.push(el));
+        },
+      }),
+    );
+    const first = document.createElement("article");
+    reg.emitReaderRender(first); // before activate: stored, no subscriber yet
+    await reg.activate("m"); // subscribing replays the last container
+    expect(seen).toEqual([first]);
+    const second = document.createElement("article");
+    reg.emitReaderRender(second);
+    expect(seen).toEqual([first, second]);
+  });
+});
+
+describe("registerStyle", () => {
+  const stylesWith = (needle: string) =>
+    [...document.head.querySelectorAll("style")].filter((s) => s.textContent?.includes(needle));
+
+  it("injects a <style> element and removes it on dispose", async () => {
+    const reg = createRegistry();
+    let off: Disposer = () => {};
+    reg.register(
+      makeModule({
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (c) => {
+          off = c.registerStyle(".tapa-test-style{color:red}");
+        },
+      }),
+    );
+    await reg.activate("m");
+    expect(stylesWith(".tapa-test-style")).toHaveLength(1);
+    off();
+    expect(stylesWith(".tapa-test-style")).toHaveLength(0);
   });
 });

@@ -9,9 +9,13 @@ import { onToasterNeeded, toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
 import { registry, useActivePanel } from "@/lib/registry";
 import { searchModule } from "@/modules/search";
+import { defaultHandlerModule } from "@/modules/default-handler";
 import { useSearch } from "@/modules/search/useSearch";
 import { useFileWatcher } from "@/lib/useFileWatcher";
 import { useOsOpen } from "@/lib/useOsOpen";
+import { presentationModule } from "@/modules/presentation";
+import { livewriteModule } from "@/modules/livewrite";
+import { ContextMenu } from "@/components/ContextMenu";
 
 // codemirror (~169KB gzip) is only used in edit mode. Load it on demand so the
 // reader-first startup bundle stays lean (smaller webview memory + faster boot).
@@ -37,6 +41,15 @@ const Toaster = lazy(() => import("sonner").then((m) => ({ default: m.Toaster })
 // Search is the first registry module; register it once at module load so the
 // ⌘⇧F command exists eagerly. The panel body is lazy-loaded on first open.
 registry.register(searchModule);
+
+// Reader plugins: register their ⌘⇧P / ⌘⇧L commands eagerly, then activate them
+// now so their right-click menu items exist before the first command ever runs.
+registry.register(presentationModule);
+registry.register(livewriteModule);
+void registry.activate("presentation");
+void registry.activate("livewrite");
+registry.register(defaultHandlerModule);
+void registry.activate("default-handler");
 
 const SearchPanel = lazy(() =>
   import("@/modules/search/SearchPanel").then((m) => ({ default: m.SearchPanel })),
@@ -179,7 +192,8 @@ export default function App(): React.ReactElement {
           <Toaster position="bottom-right" />
         </Suspense>
       )}
-      <CommandPalette files={s.files} onPick={openFile} />
+      <CommandPalette files={s.files} onPick={openFile} onOpenPath={openFileByPath} />
+      <ContextMenu />
       {activePanelId === "search" && (
         <Suspense fallback={null}>
           <SearchPanel

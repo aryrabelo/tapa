@@ -18,6 +18,24 @@ export interface PanelSpec {
   load: () => Promise<{ default: React.ComponentType<any> }>;
 }
 
+/** Context for a reader right-click, passed to context-menu items. */
+export interface ReaderContext {
+  element: Element; // the right-clicked element
+  sourceOffset: number | null; // nearest data-so source byte offset
+  line: number | null; // 1-based source line of that offset
+  selection: string; // current text selection (may be empty)
+  path: string | null; // active file path
+}
+
+/** A right-click menu entry contributed by a module. */
+export interface ContextMenuItem {
+  id: string;
+  label: string;
+  group?: string;
+  when?: (ctx: ReaderContext) => boolean;
+  run: (ctx: ReaderContext) => void;
+}
+
 export interface ModuleContext {
   registerCommand(cmd: Command): void;
   registerPanel(panel: PanelSpec): void;
@@ -26,6 +44,9 @@ export interface ModuleContext {
   showPanel(id: string): void;
   hidePanel(): void;
   onDispose(cb: Disposer): void;
+  registerContextMenuItem(item: ContextMenuItem): Disposer;
+  onReaderRender(cb: (container: HTMLElement) => void): Disposer;
+  registerStyle(css: string): Disposer;
 }
 
 export interface Module {
@@ -45,6 +66,9 @@ export interface Registry {
   activePanel(): string | null;
   subscribePanel(cb: () => void): Disposer;
   runKeybinding(e: KeyboardEvent): boolean;
+  activate(id: string): Promise<void>;
+  contextMenuItems(ctx: ReaderContext): ContextMenuItem[];
+  emitReaderRender(container: HTMLElement): void;
 }
 
 export function createRegistry(): Registry {
@@ -56,6 +80,9 @@ export function createRegistry(): Registry {
   const panels = new Map<string, PanelSpec>();
   let panelId: string | null = null;
   const panelSubs = new Set<() => void>();
+  const contextItems = new Map<string, ContextMenuItem>();
+  const readerRenderCbs = new Set<(c: HTMLElement) => void>();
+  let lastReaderContainer: HTMLElement | null = null;
 
   const record = (moduleId: string, d: Disposer) => {
     const arr = disposers.get(moduleId) ?? [];
@@ -105,6 +132,33 @@ export function createRegistry(): Registry {
       notifyPanel();
     },
     onDispose: (cb) => record(moduleId, cb),
+    registerContextMenuItem: (item) => {
+      contextItems.set(item.id, item);
+      const off = () => {
+        contextItems.delete(item.id);
+      };
+      record(moduleId, off);
+      return off;
+    },
+    onReaderRender: (cb) => {
+      readerRenderCbs.add(cb);
+      if (lastReaderContainer) cb(lastReaderContainer);
+      const off = () => {
+        readerRenderCbs.delete(cb);
+      };
+      record(moduleId, off);
+      return off;
+    },
+    registerStyle: (css) => {
+      const el = document.createElement("style");
+      el.textContent = css;
+      document.head.appendChild(el);
+      const off = () => {
+        el.remove();
+      };
+      record(moduleId, off);
+      return off;
+    },
   });
 
   const activate = async (moduleId: string) => {
@@ -156,6 +210,13 @@ export function createRegistry(): Registry {
         }
       }
       return false;
+    },
+    activate,
+    contextMenuItems: (rctx) =>
+      [...contextItems.values()].filter((it) => !it.when || it.when(rctx)),
+    emitReaderRender(container) {
+      lastReaderContainer = container;
+      for (const cb of readerRenderCbs) cb(container);
     },
   };
 }

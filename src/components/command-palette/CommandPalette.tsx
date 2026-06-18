@@ -11,9 +11,11 @@ const PaletteDialog = lazy(() =>
 export function CommandPalette({
   files,
   onPick,
+  onOpenPath,
 }: {
   files: string[];
   onPick: (path: string) => void;
+  onOpenPath: (path: string) => void;
 }): React.ReactElement | null {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -33,7 +35,13 @@ export function CommandPalette({
   if (!loaded) return null;
   return (
     <Suspense fallback={null}>
-      <PaletteDialog files={files} onPick={onPick} open={open} onOpenChange={setOpen} />
+      <PaletteDialog
+        files={files}
+        onPick={onPick}
+        onOpenPath={onOpenPath}
+        open={open}
+        onOpenChange={setOpen}
+      />
     </Suspense>
   );
 }
