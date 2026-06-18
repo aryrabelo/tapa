@@ -21,6 +21,7 @@ npm-debug.log*
 # Agentic / internal process docs and tooling — kept private, never committed
 GOAL.md
 NORTH.md
+LAUNCH.md
 docs/superpowers/
 autoresearch.sh
 
@@ -32,3 +33,6 @@ autoresearch.sh
 .cmux_workspace/
 artifacts/
 .worktrees/
+
+# Local-only auto-sync hook (core.hooksPath) — not forced on contributors
+.githooks/
