@@ -30,6 +30,10 @@ parking_lot = "0.12"
 regex = "1"
 memchr = "2"
 
+# macOS-only: CFString FFI for LaunchServices default-handler commands.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+
 [dev-dependencies]
 tempfile = "3"
 

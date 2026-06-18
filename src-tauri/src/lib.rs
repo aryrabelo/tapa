@@ -1,4 +1,5 @@
 mod commands;
+mod default_handler;
 mod fs_tree;
 mod search;
 mod watcher;
@@ -25,6 +26,8 @@ pub fn run() {
             commands::write_file,
             commands::take_pending_open,
             commands::search_content,
+            commands::is_default_markdown_handler,
+            commands::set_default_markdown_handler,
             watcher::watch_folder
         ])
         .build(tauri::generate_context!())

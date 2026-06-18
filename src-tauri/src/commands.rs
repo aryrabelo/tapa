@@ -57,6 +57,20 @@ pub fn search_content(
     Ok(())
 }
 
+/// Is Tapa the default editor for the standard Markdown UTI
+/// (`net.daringfireball.markdown`)? macOS-only; `false` elsewhere.
+#[tauri::command]
+pub fn is_default_markdown_handler() -> bool {
+    crate::default_handler::is_default()
+}
+
+/// Register Tapa as the default editor for `net.daringfireball.markdown`.
+/// macOS-only; returns `Err` on other platforms.
+#[tauri::command]
+pub fn set_default_markdown_handler() -> Result<(), String> {
+    crate::default_handler::set_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
