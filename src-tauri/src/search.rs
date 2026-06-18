@@ -62,16 +62,24 @@ impl Matcher {
     }
 }
 
-/// Truncate `line` to at most SNIPPET_MAX bytes on a char boundary (UTF-8 safe).
-fn snippet_of(line: &str) -> String {
+/// A snippet window of at most SNIPPET_MAX bytes around the match at byte `col`,
+/// on char boundaries (UTF-8 safe). Starts a little before the match so it stays
+/// visible even on very long lines (spec: "trimmed around the match"). Short
+/// lines are returned whole.
+fn snippet_around(line: &str, col: usize) -> String {
     if line.len() <= SNIPPET_MAX {
         return line.to_string();
     }
-    let mut end = SNIPPET_MAX;
-    while end > 0 && !line.is_char_boundary(end) {
+    const LEAD: usize = 24; // context bytes kept before the match
+    let mut start = col.saturating_sub(LEAD);
+    while start > 0 && !line.is_char_boundary(start) {
+        start -= 1;
+    }
+    let mut end = (start + SNIPPET_MAX).min(line.len());
+    while end < line.len() && !line.is_char_boundary(end) {
         end -= 1;
     }
-    line[..end].to_string()
+    line[start..end].to_string()
 }
 
 /// Scan one file's text. `sink` returns false to stop early (cancellation).
@@ -87,7 +95,7 @@ pub fn search_in_text(
                 path: path.to_string(),
                 line: i + 1,
                 col,
-                snippet: snippet_of(line),
+                snippet: snippet_around(line, col),
             }) {
                 return;
             }
@@ -195,6 +203,36 @@ mod tests {
         let long = "x".repeat(SNIPPET_MAX + 50);
         let hits = collect(&long, "x", false);
         assert_eq!(hits[0].snippet.len(), SNIPPET_MAX);
+    }
+
+    #[test]
+    fn snippet_windows_around_a_late_match() {
+        // Match starts well past SNIPPET_MAX: the window must still contain it.
+        let line = format!("{}needle tail", "y".repeat(400));
+        let hits = collect(&line, "needle", false);
+        assert_eq!(hits.len(), 1);
+        assert!(
+            hits[0].snippet.contains("needle"),
+            "snippet must include the match"
+        );
+        assert!(hits[0].snippet.len() <= SNIPPET_MAX);
+    }
+
+    #[test]
+    fn col_is_byte_offset_with_multibyte_prefix() {
+        // "café " is 6 bytes (é = 2), so "needle" starts at byte 6 (char 5).
+        let hits = collect("café needle", "needle", false);
+        assert_eq!(hits[0].col, 6);
+    }
+
+    #[test]
+    fn snippet_truncation_is_char_safe_on_multibyte() {
+        // 150 × 'é' (2 bytes each) = 300 bytes after the match; the window end
+        // lands mid-char and must back off to a boundary without panicking.
+        let line = format!("needle {}", "é".repeat(150));
+        let hits = collect(&line, "needle", false);
+        assert!(hits[0].snippet.len() <= SNIPPET_MAX);
+        assert!(hits[0].snippet.contains("needle"));
     }
 
     #[test]
