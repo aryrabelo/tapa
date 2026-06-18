@@ -1,0 +1,19 @@
+.gitignore
+  s_ca67cad66fb401::t_f987619ff484fb 39-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "ff533825eab320aa1294c683338424da4cfa994e",
+  "prompts": {},
+  "sessions": {
+    "s_ca67cad66fb401": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16181bbc-a7a3-45c5-92ba-84dfc910a978",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ary Rabelo <aryrabelo@gmail.com>"
+    }
+  }
+}
