@@ -36,3 +36,6 @@ artifacts/
 
 # Local-only auto-sync hook (core.hooksPath) — not forced on contributors
 .githooks/
+
+# Launch research (LinkedIn divulgation) — local-only, never committed
+launch-research/

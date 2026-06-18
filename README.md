@@ -1,12 +1,5 @@
 # Tapa
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platforms: macOS, Linux, Windows">
-  <img src="https://img.shields.io/badge/built%20with-Tauri%20v2-24C8DB.svg" alt="Built with Tauri v2">
-  <img src="https://img.shields.io/badge/Rust-stable-DEA584.svg" alt="Rust (stable)">
-</p>
-
 A fast, minimal, Rust-based Markdown reader and editor built with Tauri + React.
 
 > Reader-first Markdown. Native desktop, ~4 MB download, boots instantly.
