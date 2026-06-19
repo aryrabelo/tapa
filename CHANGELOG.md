@@ -6,7 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-19
+
 ### Added
+- New File (`⌘N`): a "New File" item in the native **File** menu creates a blank
+  Markdown file — it prompts for a save location, writes the empty file, and
+  opens it straight into edit mode. Menu-only, in keeping with the minimal UI.
 - Settings panel (`⌘,`): a modal with a Light / Dark / System theme switch, the
   keyboard-shortcut reference, and an Agent-access (MCP) note. First-party
   `settings` registry module; opens via `⌘,`, the command palette, or the
@@ -113,7 +118,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
-[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/aryrabelo/tapa/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/aryrabelo/tapa/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/aryrabelo/tapa/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/aryrabelo/tapa/compare/v0.2.0...v0.2.1
