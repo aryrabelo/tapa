@@ -55,6 +55,8 @@ of the usual web-app weight.
 - **Fuzzy file finder** — `⌘K` to jump between files by name.
 - **Content search** — `⌘⇧F` to search inside files; matches stream in from Rust
   grouped by file with the match highlighted, and `Enter` jumps to the line.
+- **Find in file** — `⌘F` to find within the open document; matches are
+  highlighted in place, `Enter` / `⇧Enter` step through them, `Esc` closes.
 - **Live reload** — external changes on disk reload automatically; if you have
   unsaved edits, Tapa asks before discarding them.
 - **OS-native theme** — follows your system light/dark appearance, with a manual
@@ -73,6 +75,7 @@ of the usual web-app weight.
 | Shortcut | Action |
 | --- | --- |
 | `⌘K` / `Ctrl-K` | Open the fuzzy file finder |
+| `⌘F` / `Ctrl-F` | Find in the current file |
 | `⌘⇧F` / `Ctrl-Shift-F` | Search inside files (content) |
 | `⌘B` / `Ctrl-B` | Toggle the sidebar |
 | `⌘S` / `Ctrl-S` | Save and return to the reader |

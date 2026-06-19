@@ -11,6 +11,8 @@ import { registry, useActivePanel } from "@/lib/registry";
 import { searchModule } from "@/modules/search";
 import { defaultHandlerModule } from "@/modules/default-handler";
 import { useSearch } from "@/modules/search/useSearch";
+import { findModule } from "@/modules/find";
+import { useFind } from "@/modules/find/useFind";
 import { useFileWatcher } from "@/lib/useFileWatcher";
 import { useOsOpen } from "@/lib/useOsOpen";
 import { presentationModule } from "@/modules/presentation";
@@ -41,6 +43,7 @@ const Toaster = lazy(() => import("sonner").then((m) => ({ default: m.Toaster })
 // Search is the first registry module; register it once at module load so the
 // ⌘⇧F command exists eagerly. The panel body is lazy-loaded on first open.
 registry.register(searchModule);
+registry.register(findModule);
 
 // Reader plugins: register their ⌘⇧P / ⌘⇧L commands eagerly, then activate them
 // now so their right-click menu items exist before the first command ever runs.
@@ -54,6 +57,8 @@ void registry.activate("default-handler");
 const SearchPanel = lazy(() =>
   import("@/modules/search/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
+
+const FindBar = lazy(() => import("@/modules/find/FindBar").then((m) => ({ default: m.FindBar })));
 
 export default function App(): React.ReactElement {
   const s = useStore();
@@ -86,6 +91,7 @@ export default function App(): React.ReactElement {
 
   const activePanelId = useActivePanel();
   const search = useSearch(openFile);
+  const find = useFind();
   useFileWatcher();
 
   // One app-wide keybinding dispatcher: routes a registered command's keybinding
@@ -203,6 +209,19 @@ export default function App(): React.ReactElement {
             onQueryChange={search.setQuery}
             onPick={search.pick}
             onClose={search.close}
+          />
+        </Suspense>
+      )}
+      {activePanelId === "find" && (
+        <Suspense fallback={null}>
+          <FindBar
+            query={find.query}
+            onQueryChange={find.setQuery}
+            count={find.count}
+            current={find.current}
+            onNext={find.next}
+            onPrev={find.prev}
+            onClose={find.close}
           />
         </Suspense>
       )}

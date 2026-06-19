@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by heading and requires an `if_match` precondition (the region's current
   text), refusing on drift; writes are atomic (temp + rename). Still zero new
   dependencies.
+- In-file find (`⌘F`): finds within the open document in reader mode and
+  highlights every match in place (CSS Custom Highlight API, no DOM mutation);
+  `Enter` / `⇧Enter` step through matches, `Esc` closes. `⌘⇧F` (whole-vault
+  search) is unchanged. Built as a first-party `find` registry module.
 
 ## [0.2.1] - 2026-06-18
 
