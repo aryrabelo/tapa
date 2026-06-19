@@ -21,6 +21,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   highlights every match in place (CSS Custom Highlight API, no DOM mutation);
   `Enter` / `⇧Enter` step through matches, `Esc` closes. `⌘⇧F` (whole-vault
   search) is unchanged. Built as a first-party `find` registry module.
+- `tapa-mcp` MCP resources + live subscriptions: `resources/list` / `read` plus
+  `resources/subscribe` / `unsubscribe`, backed by a filesystem watcher that
+  pushes `notifications/resources/updated` when a subscribed file changes on
+  disk (and `resources/list_changed` on add/remove) — reactive, no polling.
+  Available without `--write`; zero new dependencies.
 
 ## [0.2.1] - 2026-06-18
 

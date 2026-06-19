@@ -146,6 +146,11 @@ Tools: `list`, `read`, `search` (read-only by default) plus `append` and
 section by heading with an `if_match` precondition (refuses on drift); writes
 are atomic (temp + rename).
 
+It also exposes the vault as MCP **resources** with live **subscriptions**:
+`resources/subscribe` to a file and the agent is *pushed* `resources/updated`
+the instant it changes on disk (and `resources/list_changed` on add/remove) —
+reactive, not polling. Available without `--write`.
+
 ```sh
 cd src-tauri && cargo build --release --bin tapa-mcp
 # binary at src-tauri/target/release/tapa-mcp
@@ -205,11 +210,8 @@ cd src-tauri && cargo test
   measure was defeated statewide (~66% against), outvoted by the populous east
   around Belém. The cause is still alive in Congress: a bill (PDL 508/2019) that
   would trigger a fresh plebiscite remains before the Senate.
-- **Tapa cloth** — the barkcloth of the Pacific islands, beaten from the inner
-  bark of the paper-mulberry tree (_Broussonetia papyrifera_) into thin, flexible
-  sheets that are then painted, stamped, and written on. Paper tree → beaten
-  sheet → surface for marks: the full arc of a Markdown document. (In Portuguese,
-  _tapa_ is also the _cover_ of a book — "a tapa do livro".)
+- **Tapa** (the slap) — in Portuguese, a _tapa_ is a slap. Like a slap, the app
+  is unexpectedly fast — a quick, sharp strike.
 
 The product name, the bundle identifier (`com.aryrabelo.tapa`), and the window
 title are all `Tapa`. The Rust crate is still named `app` internally.

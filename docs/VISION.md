@@ -78,11 +78,16 @@ We sell Tapa as **the first agent-reactive Markdown vault**, not "another reader
    **Status:** shipped (slice 2) — Rust line-scan addressing in the headless
    server (text `if_match`, zero-dep, not a hash), atomic temp+rename writes,
    plus `append`, all gated behind `--write` (read-only by default).
-3. **Line/block-state event bus (the moat).** A diff layer over the existing
-   `file-changed` watcher derives `block:changed` / `task:done` /
-   `frontmatter:changed`, emitted on the registry bus **and** forwarded as MCP
-   `resources/updated`. *Beats Obsidian:* it has no event surface; everyone else
-   polls-and-diffs.
+3. **Live subscriptions — the reactive moat.** `tapa-mcp` exposes the vault as
+   MCP *resources* and runs its own `notify` watcher; an agent that
+   `resources/subscribe`s is **pushed** `notifications/resources/updated` the
+   moment a file changes on disk (+ `resources/list_changed` on add/remove).
+   *Beats Obsidian:* it has no event surface; everyone else polls-and-diffs.
+   **Status:** shipped (slice 3) — resources list/read + subscribe/unsubscribe +
+   a watcher thread pushing notifications, zero new deps. The richer *semantic*
+   layer (block-level `block:changed` / `task:done` diffs as a custom event) is
+   slice 3.1, deferred — standard MCP `resources/updated` is resource-level
+   ("re-read it"), the spec-compliant push.
 4. **Zero-LLM wikilink/backlink typed graph** (3 regexes on `file-changed`,
    in-memory/embedded, rebuilt from FS). The cheap-trio crown jewel.
 5. **Local hybrid search module** (`model2vec` + `sqlite-vec` + RRF over the

@@ -5,9 +5,13 @@
 
 use app_lib::fs_tree::scan_markdown;
 use app_lib::search::{search_dir, Hit, SearchOpts};
+use notify::{RecursiveMode, Watcher};
+use parking_lot::Mutex;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// 5 MB per-file guard, mirrors `commands.rs`.
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
@@ -15,6 +19,16 @@ const MAX_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_HITS: usize = 200;
 
 const DEFAULT_PROTOCOL: &str = "2024-11-05";
+
+/// Shared stdout, locked so the stdin loop and the watcher thread never interleave.
+type Out = Arc<Mutex<std::io::Stdout>>;
+
+/// Serialize one JSON-RPC message (response or notification) as a compact line.
+fn emit(out: &Out, msg: &Value) {
+    let mut w = out.lock();
+    let _ = writeln!(w, "{msg}");
+    let _ = w.flush();
+}
 
 fn ok(id: Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
@@ -176,6 +190,58 @@ fn resolve_existing(vault: &Path, rel: &str) -> Result<PathBuf, String> {
         return Err("path escapes the vault root".to_string());
     }
     Ok(canon_target)
+}
+
+/// `file://` + absolute canonical path. `p` must already be canonical.
+fn path_to_uri(p: &Path) -> String {
+    format!("file://{}", p.display())
+}
+
+/// Strip a leading `file://`; `None` for any other scheme.
+fn uri_to_path(uri: &str) -> Option<&str> {
+    uri.strip_prefix("file://")
+}
+
+/// Canonicalize a `file://` uri and confirm it lives inside the vault, mirroring
+/// `resolve_existing`'s guard but for an already-absolute path.
+fn resolve_uri(vault: &Path, uri: &str) -> Result<PathBuf, String> {
+    let path = uri_to_path(uri).ok_or("uri must start with file://")?;
+    let canon_vault = vault.canonicalize().map_err(|e| e.to_string())?;
+    let canon_target = Path::new(path).canonicalize().map_err(|e| e.to_string())?;
+    if !canon_target.starts_with(&canon_vault) {
+        return Err("path escapes the vault root".to_string());
+    }
+    Ok(canon_target)
+}
+
+/// `{ "resources": [ { uri, name, mimeType } ] }` — one entry per vault `.md`.
+fn resources_list(vault: &Path) -> Value {
+    let canon_vault = vault.canonicalize().unwrap_or_else(|_| vault.to_path_buf());
+    let resources: Vec<Value> = scan_markdown(vault)
+        .into_iter()
+        .map(|rel| {
+            let uri = path_to_uri(&canon_vault.join(&rel));
+            json!({ "uri": uri, "name": rel, "mimeType": "text/markdown" })
+        })
+        .collect();
+    json!({ "resources": resources })
+}
+
+/// Read a vault-guarded `file://` resource: `{ "contents": [ { uri, mimeType, text } ] }`.
+fn resource_read(vault: &Path, uri: &str) -> Result<Value, String> {
+    let canon_target = resolve_uri(vault, uri)?;
+    let meta = std::fs::metadata(&canon_target).map_err(|e| e.to_string())?;
+    if meta.len() > MAX_BYTES {
+        return Err(format!(
+            "File too large ({} bytes); over 5 MB guard",
+            meta.len()
+        ));
+    }
+    let text =
+        std::fs::read_to_string(&canon_target).map_err(|_| "Not a UTF-8 text file".to_string())?;
+    Ok(json!({
+        "contents": [{ "uri": uri, "mimeType": "text/markdown", "text": text }]
+    }))
 }
 
 /// Write `content` durably: write to a sibling temp file in the same directory,
@@ -374,7 +440,12 @@ fn handle_tools_call(id: Value, vault: &Path, params: &Value, writable: bool) ->
 
 /// Pure dispatch. `Some(response)` for requests (have an `id`), `None` for
 /// notifications (no `id`, e.g. `notifications/initialized`).
-fn handle(req: &Value, vault: &Path, writable: bool) -> Option<Value> {
+fn handle(
+    req: &Value,
+    vault: &Path,
+    writable: bool,
+    subs: &Mutex<HashSet<String>>,
+) -> Option<Value> {
     let method = req.get("method").and_then(Value::as_str).unwrap_or("");
 
     // Notifications carry no `id` and get no response.
@@ -394,7 +465,7 @@ fn handle(req: &Value, vault: &Path, writable: bool) -> Option<Value> {
                 id,
                 json!({
                     "protocolVersion": protocol,
-                    "capabilities": { "tools": {} },
+                    "capabilities": { "tools": {}, "resources": { "subscribe": true, "listChanged": true } },
                     "serverInfo": { "name": "tapa", "version": env!("CARGO_PKG_VERSION") }
                 }),
             ))
@@ -406,7 +477,92 @@ fn handle(req: &Value, vault: &Path, writable: bool) -> Option<Value> {
             let params = req.get("params").unwrap_or(&empty);
             Some(handle_tools_call(id, vault, params, writable))
         }
+        "resources/list" => Some(ok(id, resources_list(vault))),
+        "resources/read" => {
+            let uri = req
+                .get("params")
+                .and_then(|p| p.get("uri"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            match resource_read(vault, uri) {
+                Ok(result) => Some(ok(id, result)),
+                Err(e) => Some(err(id, -32602, &e)),
+            }
+        }
+        "resources/subscribe" => {
+            let uri = req
+                .get("params")
+                .and_then(|p| p.get("uri"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            match resolve_uri(vault, uri) {
+                Ok(p) => {
+                    subs.lock().insert(p.to_string_lossy().to_string());
+                    Some(ok(id, json!({})))
+                }
+                Err(e) => Some(err(id, -32602, &e)),
+            }
+        }
+        "resources/unsubscribe" => {
+            let uri = req
+                .get("params")
+                .and_then(|p| p.get("uri"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            if let Some(path) = uri_to_path(uri) {
+                let key = Path::new(path)
+                    .canonicalize()
+                    .map(|c| c.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| path.to_string());
+                subs.lock().remove(&key);
+            }
+            Some(ok(id, json!({})))
+        }
         _ => Some(err(id, -32601, "Method not found")),
+    }
+}
+
+/// Pure: the push notifications to send for one notify event given current
+/// subscriptions. `resources/updated` for modified/created files whose canonical
+/// path is subscribed; `resources/list_changed` for any create/remove. Returns
+/// them in send order so the watcher thread can just `emit` each.
+fn events_for(event: &notify::Event, subs: &Mutex<HashSet<String>>) -> Vec<Value> {
+    use notify::EventKind;
+    let (touch, list_changed) = match event.kind {
+        EventKind::Modify(_) => (true, false),
+        EventKind::Create(_) => (true, true),
+        EventKind::Remove(_) => (false, true),
+        _ => return Vec::new(),
+    };
+    let mut msgs = Vec::new();
+    if touch {
+        for p in &event.paths {
+            let Ok(canon) = p.canonicalize() else {
+                continue;
+            };
+            if subs.lock().contains(&canon.to_string_lossy().to_string()) {
+                msgs.push(json!({
+                    "jsonrpc": "2.0",
+                    "method": "notifications/resources/updated",
+                    "params": { "uri": path_to_uri(&canon) }
+                }));
+            }
+        }
+    }
+    if list_changed {
+        msgs.push(json!({
+            "jsonrpc": "2.0",
+            "method": "notifications/resources/list_changed"
+        }));
+    }
+    msgs
+}
+
+/// Push every notification an event produces through the shared stdout. Runs on
+/// notify's watcher thread.
+fn handle_event(event: &notify::Event, out: &Out, subs: &Mutex<HashSet<String>>) {
+    for msg in events_for(event, subs) {
+        emit(out, &msg);
     }
 }
 
@@ -433,9 +589,33 @@ fn main() {
         std::process::exit(1);
     }
 
+    let out: Out = Arc::new(Mutex::new(std::io::stdout()));
+    let subs: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+    let canon_vault = vault.canonicalize().unwrap_or_else(|_| vault.clone());
+
+    // notify runs the callback on its own thread; it pushes
+    // `resources/updated`/`list_changed` notifications through the shared stdout.
+    let w_out = Arc::clone(&out);
+    let w_subs = Arc::clone(&subs);
+    let _watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(event) = res {
+            handle_event(&event, &w_out, &w_subs);
+        }
+    }) {
+        Ok(mut w) => match w.watch(&canon_vault, RecursiveMode::Recursive) {
+            Ok(()) => Some(w),
+            Err(e) => {
+                eprintln!("warning: watch failed ({e}); push notifications disabled");
+                None
+            }
+        },
+        Err(e) => {
+            eprintln!("warning: watcher init failed ({e}); push notifications disabled");
+            None
+        }
+    };
+
     let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut out = stdout.lock();
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(l) => l,
@@ -445,12 +625,11 @@ fn main() {
             continue;
         }
         let response = match serde_json::from_str::<Value>(&line) {
-            Ok(req) => handle(&req, &vault, writable),
+            Ok(req) => handle(&req, &vault, writable, &subs),
             Err(_) => Some(err(Value::Null, -32700, "Parse error")),
         };
         if let Some(resp) = response {
-            let _ = writeln!(out, "{resp}");
-            let _ = out.flush();
+            emit(&out, &resp);
         }
     }
 }
@@ -471,7 +650,7 @@ mod tests {
     fn initialize_returns_serverinfo() {
         let dir = temp_vault();
         let req = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} });
-        let resp = handle(&req, dir.path(), false).unwrap();
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         let result = &resp["result"];
         assert_eq!(result["protocolVersion"], DEFAULT_PROTOCOL);
         assert_eq!(result["serverInfo"]["name"], "tapa");
@@ -484,7 +663,7 @@ mod tests {
             "jsonrpc": "2.0", "id": 1, "method": "initialize",
             "params": { "protocolVersion": "2025-03-26" }
         });
-        let resp = handle(&req, dir.path(), false).unwrap();
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         assert_eq!(resp["result"]["protocolVersion"], "2025-03-26");
     }
 
@@ -492,14 +671,14 @@ mod tests {
     fn notification_returns_none() {
         let dir = temp_vault();
         let req = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
-        assert!(handle(&req, dir.path(), false).is_none());
+        assert!(handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).is_none());
     }
 
     #[test]
     fn tools_list_has_three_tools() {
         let dir = temp_vault();
         let req = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
-        let resp = handle(&req, dir.path(), false).unwrap();
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         let tools = resp["result"]["tools"].as_array().unwrap();
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert_eq!(names, vec!["list", "read", "search"]);
@@ -512,7 +691,7 @@ mod tests {
             "jsonrpc": "2.0", "id": 3, "method": "tools/call",
             "params": { "name": "list", "arguments": {} }
         });
-        let resp = handle(&req, dir.path(), false).unwrap();
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         assert_eq!(resp["result"]["isError"], false);
         let text = resp["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("note.md"));
@@ -526,7 +705,7 @@ mod tests {
             "jsonrpc": "2.0", "id": 4, "method": "tools/call",
             "params": { "name": "read", "arguments": { "path": "note.md" } }
         });
-        let resp = handle(&req, dir.path(), false).unwrap();
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         assert_eq!(resp["result"]["isError"], false);
         assert!(resp["result"]["content"][0]["text"]
             .as_str()
@@ -546,7 +725,7 @@ mod tests {
             "jsonrpc": "2.0", "id": 5, "method": "tools/call",
             "params": { "name": "read", "arguments": { "path": rel } }
         });
-        let resp = handle(&req, dir.path(), false).unwrap();
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         let _ = fs::remove_file(&secret);
         assert_eq!(resp["result"]["isError"], true);
         assert!(!resp["result"]["content"][0]["text"]
@@ -562,7 +741,7 @@ mod tests {
             "jsonrpc": "2.0", "id": 6, "method": "tools/call",
             "params": { "name": "search", "arguments": { "query": "hello" } }
         });
-        let resp = handle(&hit, dir.path(), false).unwrap();
+        let resp = handle(&hit, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         assert_eq!(resp["result"]["isError"], false);
         let text = resp["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("note.md:1:0:"));
@@ -571,7 +750,7 @@ mod tests {
             "jsonrpc": "2.0", "id": 7, "method": "tools/call",
             "params": { "name": "search", "arguments": { "query": "zzzznotpresent" } }
         });
-        let resp = handle(&miss, dir.path(), false).unwrap();
+        let resp = handle(&miss, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         assert_eq!(resp["result"]["content"][0]["text"], "No matches.");
     }
 
@@ -579,7 +758,7 @@ mod tests {
     fn unknown_method_is_error() {
         let dir = temp_vault();
         let req = json!({ "jsonrpc": "2.0", "id": 8, "method": "bogus/thing" });
-        let resp = handle(&req, dir.path(), false).unwrap();
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         assert_eq!(resp["error"]["code"], -32601);
     }
 
@@ -588,7 +767,7 @@ mod tests {
             "jsonrpc": "2.0", "id": 99, "method": "tools/call",
             "params": { "name": name, "arguments": args }
         });
-        handle(&req, dir, writable).unwrap()
+        handle(&req, dir, writable, &Mutex::new(HashSet::new())).unwrap()
     }
 
     #[test]
@@ -596,7 +775,7 @@ mod tests {
         let dir = temp_vault();
         let req = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
 
-        let rw = handle(&req, dir.path(), true).unwrap();
+        let rw = handle(&req, dir.path(), true, &Mutex::new(HashSet::new())).unwrap();
         let names: Vec<&str> = rw["result"]["tools"]
             .as_array()
             .unwrap()
@@ -605,7 +784,7 @@ mod tests {
             .collect();
         assert_eq!(names, vec!["list", "read", "search", "append", "patch"]);
 
-        let ro = handle(&req, dir.path(), false).unwrap();
+        let ro = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         assert_eq!(ro["result"]["tools"].as_array().unwrap().len(), 3);
     }
 
@@ -766,5 +945,179 @@ mod tests {
         );
         assert_eq!(resp["result"]["isError"], true);
         assert!(!evil.exists());
+    }
+
+    #[test]
+    fn uri_path_round_trip() {
+        let p = Path::new("/tmp/vault/note.md");
+        let uri = path_to_uri(p);
+        assert_eq!(uri, "file:///tmp/vault/note.md");
+        assert_eq!(uri_to_path(&uri), Some("/tmp/vault/note.md"));
+        assert_eq!(uri_to_path("https://example.com"), None);
+    }
+
+    #[test]
+    fn initialize_advertises_resources() {
+        let dir = temp_vault();
+        let req = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} });
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
+        let caps = &resp["result"]["capabilities"]["resources"];
+        assert_eq!(caps["subscribe"], true);
+        assert_eq!(caps["listChanged"], true);
+    }
+
+    #[test]
+    fn resources_list_one_per_md() {
+        let dir = temp_vault();
+        let req = json!({ "jsonrpc": "2.0", "id": 1, "method": "resources/list" });
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
+        let resources = resp["result"]["resources"].as_array().unwrap();
+        assert_eq!(resources.len(), 2);
+        for r in resources {
+            assert_eq!(r["mimeType"], "text/markdown");
+            assert!(r["uri"].as_str().unwrap().starts_with("file://"));
+        }
+        let names: Vec<&str> = resources
+            .iter()
+            .map(|r| r["name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"note.md"));
+        assert!(names.contains(&"other.md"));
+    }
+
+    #[test]
+    fn resources_read_returns_text() {
+        let dir = temp_vault();
+        let canon = dir.path().canonicalize().unwrap();
+        let uri = path_to_uri(&canon.join("note.md"));
+        let req = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "resources/read",
+            "params": { "uri": uri }
+        });
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
+        let text = resp["result"]["contents"][0]["text"].as_str().unwrap();
+        assert!(text.contains("hello world"));
+    }
+
+    #[test]
+    fn resources_read_blocks_out_of_vault() {
+        let dir = temp_vault();
+        let req = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "resources/read",
+            "params": { "uri": "file:///etc/passwd" }
+        });
+        let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
+        assert!(resp.get("error").is_some());
+        assert!(resp["result"].is_null());
+    }
+
+    #[test]
+    fn subscribe_then_unsubscribe_manages_state() {
+        let dir = temp_vault();
+        let canon = dir.path().canonicalize().unwrap();
+        let note = canon.join("note.md");
+        let uri = path_to_uri(&note);
+        let key = note.to_string_lossy().to_string();
+        let subs = Mutex::new(HashSet::new());
+
+        let sub = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "resources/subscribe",
+            "params": { "uri": uri.clone() }
+        });
+        let resp = handle(&sub, dir.path(), false, &subs).unwrap();
+        assert_eq!(resp["result"], json!({}));
+        assert!(subs.lock().contains(&key));
+
+        let unsub = json!({
+            "jsonrpc": "2.0", "id": 2, "method": "resources/unsubscribe",
+            "params": { "uri": uri }
+        });
+        let resp = handle(&unsub, dir.path(), false, &subs).unwrap();
+        assert_eq!(resp["result"], json!({}));
+        assert!(!subs.lock().contains(&key));
+    }
+
+    #[test]
+    fn subscribe_rejects_out_of_vault() {
+        let dir = temp_vault();
+        let subs = Mutex::new(HashSet::new());
+        let req = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "resources/subscribe",
+            "params": { "uri": "file:///etc/passwd" }
+        });
+        let resp = handle(&req, dir.path(), false, &subs).unwrap();
+        assert!(resp.get("error").is_some());
+        assert!(subs.lock().is_empty());
+    }
+
+    fn ev(kind: notify::EventKind, paths: Vec<std::path::PathBuf>) -> notify::Event {
+        notify::Event {
+            kind,
+            paths,
+            attrs: Default::default(),
+        }
+    }
+
+    #[test]
+    fn events_for_updated_when_subscribed() {
+        let dir = temp_vault();
+        let note = dir.path().canonicalize().unwrap().join("note.md");
+        let mut set = HashSet::new();
+        set.insert(note.to_string_lossy().to_string());
+        let subs = Mutex::new(set);
+        let e = ev(
+            notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            vec![note.clone()],
+        );
+        let msgs = events_for(&e, &subs);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0]["method"], "notifications/resources/updated");
+        assert_eq!(msgs[0]["params"]["uri"], path_to_uri(&note));
+    }
+
+    #[test]
+    fn events_for_silent_when_not_subscribed() {
+        let dir = temp_vault();
+        let note = dir.path().canonicalize().unwrap().join("note.md");
+        let subs = Mutex::new(HashSet::new());
+        let e = ev(
+            notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            vec![note],
+        );
+        assert!(events_for(&e, &subs).is_empty());
+    }
+
+    #[test]
+    fn events_for_create_and_remove_emit_list_changed() {
+        let dir = temp_vault();
+        let canon = dir.path().canonicalize().unwrap();
+        let subs = Mutex::new(HashSet::new());
+        let create = ev(
+            notify::EventKind::Create(notify::event::CreateKind::Any),
+            vec![canon.join("note.md")],
+        );
+        assert!(events_for(&create, &subs)
+            .iter()
+            .any(|m| m["method"] == "notifications/resources/list_changed"));
+
+        let remove = ev(
+            notify::EventKind::Remove(notify::event::RemoveKind::Any),
+            vec![canon.join("gone.md")],
+        );
+        let msgs = events_for(&remove, &subs);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0]["method"], "notifications/resources/list_changed");
+    }
+
+    #[test]
+    fn events_for_ignores_access_events() {
+        let dir = temp_vault();
+        let note = dir.path().canonicalize().unwrap().join("note.md");
+        let subs = Mutex::new(HashSet::new());
+        let e = ev(
+            notify::EventKind::Access(notify::event::AccessKind::Any),
+            vec![note],
+        );
+        assert!(events_for(&e, &subs).is_empty());
     }
 }
