@@ -12,6 +12,7 @@ use std::collections::HashSet;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 5 MB per-file guard, mirrors `commands.rs`.
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
@@ -70,6 +71,15 @@ fn tools_schema(writable: bool) -> Value {
                     "regex": { "type": "boolean" }
                 },
                 "required": ["query"]
+            }
+        }),
+        json!({
+            "name": "focus",
+            "description": "Signal the Tapa UI to open and focus a vault file by its vault-relative path (navigation only; does not modify content).",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "path": { "type": "string" } },
+                "required": ["path"]
             }
         }),
     ];
@@ -266,6 +276,25 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     })
 }
 
+/// Write a `focus` navigation signal to `<vault>/.tapa/control.json` so a watching
+/// UI can open the requested file. The path must already exist inside the vault.
+fn tool_focus(vault: &Path, args: &Value) -> Result<String, String> {
+    let rel = args
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or("missing 'path' argument")?;
+    resolve_existing(vault, rel)?;
+    let control_dir = vault.join(".tapa");
+    std::fs::create_dir_all(&control_dir).map_err(|e| e.to_string())?;
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis() as u64;
+    let payload = json!({ "action": "focus", "path": rel, "ts": ts });
+    atomic_write(&control_dir.join("control.json"), &payload.to_string())?;
+    Ok(format!("focus signalled for {rel}"))
+}
+
 fn tool_append(vault: &Path, args: &Value) -> Result<String, String> {
     let rel = args
         .get("path")
@@ -427,6 +456,7 @@ fn handle_tools_call(id: Value, vault: &Path, params: &Value, writable: bool) ->
             "list" => tool_list(vault),
             "read" => tool_read(vault, args),
             "search" => tool_search(vault, args),
+            "focus" => tool_focus(vault, args),
             "append" => tool_append(vault, args),
             "patch" => tool_patch(vault, args),
             other => Err(format!("unknown tool: {other}")),
@@ -675,13 +705,13 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_has_three_tools() {
+    fn tools_list_has_read_only_tools() {
         let dir = temp_vault();
         let req = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
         let resp = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
         let tools = resp["result"]["tools"].as_array().unwrap();
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, vec!["list", "read", "search"]);
+        assert_eq!(names, vec!["list", "read", "search", "focus"]);
     }
 
     #[test]
@@ -782,10 +812,41 @@ mod tests {
             .iter()
             .map(|t| t["name"].as_str().unwrap())
             .collect();
-        assert_eq!(names, vec!["list", "read", "search", "append", "patch"]);
+        assert_eq!(
+            names,
+            vec!["list", "read", "search", "focus", "append", "patch"]
+        );
 
         let ro = handle(&req, dir.path(), false, &Mutex::new(HashSet::new())).unwrap();
-        assert_eq!(ro["result"]["tools"].as_array().unwrap().len(), 3);
+        assert_eq!(ro["result"]["tools"].as_array().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn focus_writes_control_file() {
+        let dir = temp_vault();
+        // Available even read-only: focus is a navigation signal, not a write.
+        let resp = call("focus", json!({ "path": "note.md" }), false, dir.path());
+        assert_eq!(resp["result"]["isError"], false);
+        let control = dir.path().join(".tapa").join("control.json");
+        let parsed: Value = serde_json::from_str(&fs::read_to_string(&control).unwrap()).unwrap();
+        assert_eq!(parsed["action"], "focus");
+        assert_eq!(parsed["path"], "note.md");
+        assert!(parsed["ts"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn focus_blocks_traversal() {
+        let dir = temp_vault();
+        let resp = call("focus", json!({ "path": "../x.md" }), false, dir.path());
+        assert_eq!(resp["result"]["isError"], true);
+        assert!(!dir.path().join(".tapa").join("control.json").exists());
+    }
+
+    #[test]
+    fn focus_rejects_missing_file() {
+        let dir = temp_vault();
+        let resp = call("focus", json!({ "path": "nope.md" }), false, dir.path());
+        assert_eq!(resp["result"]["isError"], true);
     }
 
     #[test]

@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Settings panel (`⌘,`): a modal with a Light / Dark / System theme switch, the
+  keyboard-shortcut reference, and an Agent-access (MCP) note. First-party
+  `settings` registry module; opens via `⌘,`, the command palette, or the
+  right-click menu; `Esc` or a backdrop click closes it.
+- Live sidebar refresh: the file tree now updates in place when files are added
+  or removed on disk (e.g. by an agent), not only when the active file changes.
+- Agent-driven focus: `tapa-mcp` gains a `focus` tool that writes
+  `.tapa/control.json`; the running app watches that file and opens / focuses the
+  requested note — the first agent→UI control channel. Zero new deps, available
+  without `--write`.
+
+### Fixed
+- Live-write (`⌘⇧L`) did nothing when launched from a click (right-click menu or
+  command palette): the launching click reached the click-to-stop handler and
+  tore the session down before the first reveal. It now ignores clicks until the
+  first block has revealed; a later click still stops it as before.
+
 ## [0.2.3] - 2026-06-19
 
 ### Fixed
@@ -93,6 +113,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
+[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.2.3...HEAD
 [0.2.3]: https://github.com/aryrabelo/tapa/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/aryrabelo/tapa/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/aryrabelo/tapa/compare/v0.2.0...v0.2.1

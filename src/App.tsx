@@ -18,6 +18,7 @@ import { useFileWatcher } from "@/lib/useFileWatcher";
 import { useOsOpen } from "@/lib/useOsOpen";
 import { presentationModule } from "@/modules/presentation";
 import { livewriteModule } from "@/modules/livewrite";
+import { settingsModule } from "@/modules/settings";
 import { ContextMenu } from "@/components/ContextMenu";
 
 // codemirror (~169KB gzip) is only used in edit mode. Load it on demand so the
@@ -56,12 +57,18 @@ registry.register(defaultHandlerModule);
 void registry.activate("default-handler");
 registry.register(updaterModule);
 void registry.activate("updater");
+registry.register(settingsModule);
+void registry.activate("settings");
 
 const SearchPanel = lazy(() =>
   import("@/modules/search/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
 
 const FindBar = lazy(() => import("@/modules/find/FindBar").then((m) => ({ default: m.FindBar })));
+
+const SettingsPanel = lazy(() =>
+  import("@/modules/settings/SettingsPanel").then((m) => ({ default: m.SettingsPanel })),
+);
 
 export default function App(): React.ReactElement {
   const s = useStore();
@@ -226,6 +233,11 @@ export default function App(): React.ReactElement {
             onPrev={find.prev}
             onClose={find.close}
           />
+        </Suspense>
+      )}
+      {activePanelId === "settings" && (
+        <Suspense fallback={null}>
+          <SettingsPanel onClose={() => registry.runCommand("settings.close")} />
         </Suspense>
       )}
       {s.tree.length > 0 && sidebarOpen && (

@@ -3,7 +3,7 @@ import { createBlockReveal } from "@/modules/reveal";
 
 // ponytail: block-granular reveal — looks like a typewriter for screen
 // recording without walking text nodes; switch to per-character if needed later.
-const STEP_MS = 700;
+export const STEP_MS = 700;
 
 // Live-write mode: progressively reveals the active file's rendered content over
 // time (animated reveal) for screen recordings. Stops on click, Esc, or
@@ -13,16 +13,23 @@ const reveal = createBlockReveal({
   transition: "opacity 320ms ease",
   hiddenStyle: "opacity: 0;",
   driver: ({ advance, stop }) => {
+    // Ignore clicks until the first timer-driven reveal. Otherwise the very
+    // interaction that launches live-write (a context-menu item or ⌘K palette
+    // pick is a click) reaches this stop listener and cancels the session
+    // before anything appears — the "nothing happens" bug. A single rAF defer
+    // is not enough: overlay teardown can dispatch a click a frame later. Once
+    // the first block has revealed, a click stops it (the intended UX).
+    let revealed = false;
     const timer = setInterval(() => {
+      revealed = true;
       if (!advance()) clearInterval(timer);
     }, STEP_MS);
     const onClick = () => {
-      stop();
+      if (revealed) stop();
     };
-    const raf = requestAnimationFrame(() => document.addEventListener("click", onClick));
+    document.addEventListener("click", onClick);
     return () => {
       clearInterval(timer);
-      cancelAnimationFrame(raf);
       document.removeEventListener("click", onClick);
     };
   },
