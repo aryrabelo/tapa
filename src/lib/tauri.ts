@@ -1,5 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 export const scanTree = (root: string): Promise<string[]> =>
   invoke<string[]>("scan_tree", { root });
@@ -22,6 +22,14 @@ export async function pickFile(): Promise<string | null> {
   const sel = await open({
     directory: false,
     multiple: false,
+    filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+  });
+  return typeof sel === "string" ? sel : null;
+}
+
+export async function pickSavePath(): Promise<string | null> {
+  const sel = await save({
+    defaultPath: "untitled.md",
     filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
   });
   return typeof sel === "string" ? sel : null;

@@ -4,7 +4,15 @@ import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { pickFile, pickFolder, readFile, scanTree, watchFolder, writeFile } from "@/lib/tauri";
+import {
+  pickFile,
+  pickFolder,
+  pickSavePath,
+  readFile,
+  scanTree,
+  watchFolder,
+  writeFile,
+} from "@/lib/tauri";
 import { onToasterNeeded, toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
 import { registry, useActivePanel } from "@/lib/registry";
@@ -16,6 +24,7 @@ import { findModule } from "@/modules/find";
 import { useFind } from "@/modules/find/useFind";
 import { useFileWatcher } from "@/lib/useFileWatcher";
 import { useOsOpen } from "@/lib/useOsOpen";
+import { useNewFile } from "@/lib/useNewFile";
 import { presentationModule } from "@/modules/presentation";
 import { livewriteModule } from "@/modules/livewrite";
 import { settingsModule } from "@/modules/settings";
@@ -165,6 +174,22 @@ export default function App(): React.ReactElement {
     await openFileByPath(file);
   }
 
+  // Native "New File" menu (⌘N): pick a save location, write a blank file, then
+  // open it straight into edit mode. No in-memory untitled buffer, so the
+  // path-based save model stays simple.
+  const newFile = useCallback(async () => {
+    const path = await pickSavePath();
+    if (!path) return;
+    try {
+      await writeFile(path, "");
+    } catch (e) {
+      toast.error(String(e));
+      return;
+    }
+    await openFileByPath(path);
+    useStore.getState().enterEdit(0);
+  }, [openFileByPath]);
+
   async function openFile(rel: string) {
     const { root } = useStore.getState();
     if (!root) return;
@@ -198,6 +223,7 @@ export default function App(): React.ReactElement {
   };
 
   useOsOpen(openFileByPath);
+  useNewFile(newFile);
 
   const folderName = s.root ? (s.root.split(/[/\\]/).filter(Boolean).pop() ?? null) : null;
 
