@@ -11,8 +11,10 @@
 //! default handler, so other targets return a clear error / `false`.
 
 /// Standard Daring Fireball Markdown UTI (also exported by many editors).
+#[cfg(target_os = "macos")]
 const MARKDOWN_UTI: &str = "net.daringfireball.markdown";
 /// Tapa's bundle identifier (matches tauri.conf.json `identifier`).
+#[cfg(target_os = "macos")]
 const BUNDLE_ID: &str = "com.aryrabelo.tapa";
 
 #[cfg(target_os = "macos")]

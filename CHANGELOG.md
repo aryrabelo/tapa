@@ -26,6 +26,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pushes `notifications/resources/updated` when a subscribed file changes on
   disk (and `resources/list_changed` on add/remove) — reactive, no polling.
   Available without `--write`; zero new dependencies.
+- Auto-update: a **Check for Updates** command/menu item that pulls signed
+  releases from GitHub Releases (`latest.json`) via the Tauri updater plugin,
+  downloads, installs, and relaunches. Fails closed — an unsigned/unverified
+  build can never install. Desktop-only; requires a one-time signing-key setup
+  (see README → Auto-update & releasing).
+- Weekly scheduled CI (`.github/workflows/weekly.yml`): artifacts-only build
+  across macOS (aarch64 + x86_64), Linux, and Windows every Monday, uploaded for
+  inspection.
+- Post-build **artifact size gate** (`scripts/check-size.mjs` + `size-budget.json`):
+  CI fails when the macOS `.dmg` or `.app` exceeds its committed budget. The
+  budget is never auto-raised — a human reviews any growth and bumps it by hand
+  (block-and-ask). Runs in CI and in the weekly build.
+
+### Fixed
+- Release/bundle builds failed with "failed to find main binary" after the
+  `tapa-mcp` binary was added; set `default-run = "app"` so the bundler picks the
+  app binary.
 
 ## [0.2.1] - 2026-06-18
 

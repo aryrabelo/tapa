@@ -1,32 +1,35 @@
-name: Release
+name: Weekly Build
 
-# Builds the Tauri app for macOS, Linux, and Windows and attaches the bundles to
-# a DRAFT GitHub release. Nothing is published automatically — a human reviews
-# and publishes the draft. Triggered only by a version tag or manual dispatch.
+# Artifacts-only build across all platforms, on a weekly schedule. Nothing is
+# released or published — the bundles are uploaded as run artifacts (kept 7
+# days) so we can inspect them, and the macOS build also runs the size gate.
 on:
-  push:
-    tags:
-      - "v*"
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    name: Build (${{ matrix.platform }})
+    name: Build (${{ matrix.id }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-latest
             args: "--target aarch64-apple-darwin"
+            id: macos-aarch64
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
+            id: macos-x86_64
           - platform: ubuntu-latest
             args: ""
+            id: linux
           - platform: windows-latest
             args: ""
+            id: windows
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -58,15 +61,22 @@ jobs:
 
       - run: npm ci
 
-      - name: Build and draft release
+      # Inspection-only: skip updater-artifact signing (no secret needed) via the
+      # CI config override. The .app/.dmg still carry the full binary, so the
+      # macOS size gate stays meaningful.
+      - name: Build bundles (no release)
         uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', github.run_number) }}
-          releaseName: "Tapa ${{ github.ref_type == 'tag' && github.ref_name || github.run_number }}"
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+          args: '${{ matrix.args }} --config {"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Check artifact sizes against budget
+        if: startsWith(matrix.platform, 'macos')
+        run: node scripts/check-size.mjs
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.id }}
+          path: src-tauri/target/**/release/bundle/**
+          retention-days: 7
+          if-no-files-found: error

@@ -24,8 +24,17 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/aryrabelo/tapa/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUzRThDNDEwNTkxM0E1ODYKUldTR3BSTlpFTVRvNDNnRjR5TUxhVkN4MS9oYTdUOSt4SUdXN1ZLQUg4WWdZTUJxa1VBUG5BczQK"
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",

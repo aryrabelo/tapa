@@ -10,6 +10,7 @@ import { useStore } from "@/state/store";
 import { registry, useActivePanel } from "@/lib/registry";
 import { searchModule } from "@/modules/search";
 import { defaultHandlerModule } from "@/modules/default-handler";
+import { updaterModule } from "@/modules/updater";
 import { useSearch } from "@/modules/search/useSearch";
 import { findModule } from "@/modules/find";
 import { useFind } from "@/modules/find/useFind";
@@ -53,6 +54,8 @@ void registry.activate("presentation");
 void registry.activate("livewrite");
 registry.register(defaultHandlerModule);
 void registry.activate("default-handler");
+registry.register(updaterModule);
+void registry.activate("updater");
 
 const SearchPanel = lazy(() =>
   import("@/modules/search/SearchPanel").then((m) => ({ default: m.SearchPanel })),

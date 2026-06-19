@@ -86,3 +86,26 @@ jobs:
         run: |
           cargo install cargo-audit --locked || true
           cargo audit --file src-tauri/Cargo.lock
+
+  size:
+    name: Artifact size gate (macOS)
+    runs-on: macos-latest
+    # The dmg + app bundles carry the full binary (updater plugin included), so
+    # the size gate needs no signing secret: the CI config override disables
+    # updater-artifact signing. See scripts/check-size.mjs for the block-and-ask
+    # rule. Only release.yml signs and emits latest.json.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Build macOS bundles (dmg + app)
+        run: npm run tauri build -- --bundles dmg,app --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Check artifact sizes against budget
+        run: node scripts/check-size.mjs
