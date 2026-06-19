@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Tapa",
   "mainBinaryName": "Tapa",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "identifier": "com.aryrabelo.tapa",
   "build": {
     "frontendDist": "../dist",
@@ -29,7 +29,7 @@
       "endpoints": [
         "https://github.com/aryrabelo/tapa/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUzRThDNDEwNTkxM0E1ODYKUldTR3BSTlpFTVRvNDNnRjR5TUxhVkN4MS9oYTdUOSt4SUdXN1ZLQUg4WWdZTUJxa1VBUG5BczQK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEyREVGNjM2OUJGMzc0OEIKUldTTGRQT2JOdmJlRXVPZ0NNc2R2eGJDekVBd1RoblVVYUx5THdwNWR6RlhLd0xaamFaaU0ybGkK"
     }
   },
   "bundle": {
