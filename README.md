@@ -197,6 +197,38 @@ npm run build           # tsc + Vite production build
 cd src-tauri && cargo test
 ```
 
+## 🔄 Auto-update & releasing
+
+Tapa updates itself from **GitHub Releases**. The updater plugin checks
+`latest.json` on the latest published release; **Check for Updates** (command
+palette / right-click) downloads, verifies, installs, and relaunches. Updates
+are signed — an unsigned or tampered build is refused.
+
+One-time signing setup (required before the first release that should auto-update):
+
+```sh
+# 1. Generate a minisign keypair (keep the private key OUT of the repo):
+CI=true npx tauri signer generate -w ~/.tauri/tapa.key
+
+# 2. Put the PUBLIC key into src-tauri/tauri.conf.json →
+#    plugins.updater.pubkey   (replaces REPLACE_WITH_MINISIGN_PUBLIC_KEY)
+
+# 3. Add the PRIVATE key + its password as GitHub repo secrets:
+#    TAURI_SIGNING_PRIVATE_KEY            (the key file contents)
+#    TAURI_SIGNING_PRIVATE_KEY_PASSWORD   (the password you chose)
+```
+
+`release.yml` then signs the bundles and uploads `latest.json` on a version tag.
+Until the public key is set, Check for Updates fails closed (verification can't
+pass) — safe, but non-functional, by design.
+
+### Download size budget
+
+`size-budget.json` caps the macOS `.dmg` and `.app` size. CI (and the weekly
+build) run `node scripts/check-size.mjs` after building and **fail** if an
+artifact exceeds its budget. The budget is never auto-raised: a human reviews
+the growth and bumps the number by hand. Keeps the install footprint honest.
+
 ## 📛 Naming
 
 **Tapa** is chosen for its double meaning:

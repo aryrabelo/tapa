@@ -7,6 +7,9 @@ license = "MIT"
 repository = "https://github.com/aryrabelo/tapa"
 edition = "2021"
 rust-version = "1.77.2"
+# Two binaries exist (the app from src/main.rs and the tapa-mcp helper), so the
+# bundler needs to know which one is the app.
+default-run = "app"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -33,6 +36,8 @@ tauri-plugin-dialog = "2"
 parking_lot = "0.12"
 regex = "1"
 memchr = "2"
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"
 
 # macOS-only: CFString FFI for LaunchServices default-handler commands.
 [target.'cfg(target_os = "macos")'.dependencies]
