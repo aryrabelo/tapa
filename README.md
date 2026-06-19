@@ -138,7 +138,10 @@ builds it, and the ~5 MB reader stays a pure reader.
 
 It speaks newline-delimited JSON-RPC over stdio, reuses the same Rust I/O as the
 app (zero extra dependencies), and reads are guarded against escaping the vault.
-Read-only tools today: `list`, `read`, `search`.
+Tools: `list`, `read`, `search` (read-only by default) plus `append` and
+`patch` when started with `--write`. `patch` edits a block by `^block-id` or a
+section by heading with an `if_match` precondition (refuses on drift); writes
+are atomic (temp + rename).
 
 ```sh
 cd src-tauri && cargo build --release --bin tapa-mcp
@@ -146,6 +149,9 @@ cd src-tauri && cargo build --release --bin tapa-mcp
 
 # Claude Code (any MCP client works — run `tapa-mcp <vault>` as a stdio server):
 claude mcp add tapa -- /absolute/path/to/tapa-mcp /absolute/path/to/your/vault
+
+# read + write (append/patch) — omit --write for read-only:
+claude mcp add tapa -- /absolute/path/to/tapa-mcp /absolute/path/to/your/vault --write
 ```
 
 ## 🛠️ How it's built

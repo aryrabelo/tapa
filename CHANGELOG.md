@@ -12,6 +12,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `search`. **Opt-in and not bundled** with the app — build it separately and
   point your agent at it. Reuses the app's Rust I/O; zero new runtime
   dependencies; reads are guarded against path traversal outside the vault.
+- `tapa-mcp` write tools `append` and `patch`, gated behind a `--write` flag
+  (read-only by default). `patch` addresses a block by `^block-id` or a section
+  by heading and requires an `if_match` precondition (the region's current
+  text), refusing on drift; writes are atomic (temp + rename). Still zero new
+  dependencies.
 
 ## [0.2.1] - 2026-06-18
 

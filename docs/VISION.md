@@ -70,11 +70,14 @@ We sell Tapa as **the first agent-reactive Markdown vault**, not "another reader
    plugin, no API key, no racing second process — Tapa is the canonical writer.
    **Status:** slice 1 shipped — read-only `list` / `read` / `search` as the
    opt-in `tapa-mcp` binary (hand-rolled JSON-RPC over stdio, zero new deps,
-   path-traversal-guarded). `append` / `patch` / `frontmatter_query` = slice 2.
-2. **Deterministic block-addressed `patch`** (reuse `src/lib/source-map.ts`) by
-   `^block-id` / heading-path against the live parse tree, with an `If-Match`
-   content-hash precondition. *Beats Obsidian:* their line-context patch silently
-   misapplies under drift; Tapa edits by parsed identity.
+   path-traversal-guarded). `append` / `patch` shipped (slice 2); `frontmatter_query` later.
+2. **Deterministic block-addressed `patch`** by `^block-id` / heading-path, with
+   an `if_match` precondition (the region's expected current text). *Beats
+   Obsidian:* their line-context patch silently misapplies under drift; Tapa
+   edits by parsed identity and refuses on mismatch.
+   **Status:** shipped (slice 2) — Rust line-scan addressing in the headless
+   server (text `if_match`, zero-dep, not a hash), atomic temp+rename writes,
+   plus `append`, all gated behind `--write` (read-only by default).
 3. **Line/block-state event bus (the moat).** A diff layer over the existing
    `file-changed` watcher derives `block:changed` / `task:done` /
    `frontmatter:changed`, emitted on the registry bus **and** forwarded as MCP
