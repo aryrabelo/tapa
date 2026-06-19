@@ -37,6 +37,10 @@ We sell Tapa as **the first agent-reactive Markdown vault**, not "another reader
 3. **Adopt `[[wikilinks]]` + `^block-id`** (Obsidian-portable) as part of Tapa's
    identity — required for the cheap graph and deterministic block addressing.
 4. **The moat is the narrative:** native MCP + a live line/block event bus.
+5. **MCP ships as an opt-in separate binary (`tapa-mcp`), not bundled.** The
+   default app stays a pure ~5 MB reader; whoever wants the agent layer installs
+   the binary and points their agent at it. Distribution ≠ bloat —
+   *"quem não precisa nem usa."*
 
 ## Refuse (discipline = identity)
 
@@ -64,6 +68,9 @@ We sell Tapa as **the first agent-reactive Markdown vault**, not "another reader
    The *same* registry registration becomes a human command **and** an agent
    tool. Runs with or without the UI open. *Beats Obsidian:* no GUI, no REST
    plugin, no API key, no racing second process — Tapa is the canonical writer.
+   **Status:** slice 1 shipped — read-only `list` / `read` / `search` as the
+   opt-in `tapa-mcp` binary (hand-rolled JSON-RPC over stdio, zero new deps,
+   path-traversal-guarded). `append` / `patch` / `frontmatter_query` = slice 2.
 2. **Deterministic block-addressed `patch`** (reuse `src/lib/source-map.ts`) by
    `^block-id` / heading-path against the live parse tree, with an `If-Match`
    content-hash precondition. *Beats Obsidian:* their line-context patch silently

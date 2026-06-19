@@ -1,7 +1,7 @@
 mod commands;
 mod default_handler;
-mod fs_tree;
-mod search;
+pub mod fs_tree;
+pub mod search;
 mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

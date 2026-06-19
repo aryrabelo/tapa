@@ -21,6 +21,7 @@
 - [✨ Features](#-features)
 - [⌨️ Keyboard shortcuts](#️-keyboard-shortcuts)
 - [📦 Install](#-install)
+- [🤖 Agent access (MCP)](#-agent-access-mcp)
 - [🛠️ How it's built](#️-how-its-built)
 - [🗂️ Project layout](#️-project-layout)
 - [✅ Verification](#-verification)
@@ -126,6 +127,25 @@ The packaged app is written to
 
 ```sh
 npm run tauri dev
+```
+
+## 🤖 Agent access (MCP)
+
+Tapa ships an **optional** Model Context Protocol server, `tapa-mcp`, so an AI
+agent (Claude Code, Codex, Cursor, …) can read and search your vault. It is a
+**separate binary, not bundled** with the app — whoever doesn't need it never
+builds it, and the ~5 MB reader stays a pure reader.
+
+It speaks newline-delimited JSON-RPC over stdio, reuses the same Rust I/O as the
+app (zero extra dependencies), and reads are guarded against escaping the vault.
+Read-only tools today: `list`, `read`, `search`.
+
+```sh
+cd src-tauri && cargo build --release --bin tapa-mcp
+# binary at src-tauri/target/release/tapa-mcp
+
+# Claude Code (any MCP client works — run `tapa-mcp <vault>` as a stdio server):
+claude mcp add tapa -- /absolute/path/to/tapa-mcp /absolute/path/to/your/vault
 ```
 
 ## 🛠️ How it's built

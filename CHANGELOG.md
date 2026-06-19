@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Optional `tapa-mcp` binary: a Model Context Protocol server (stdio JSON-RPC)
+  that exposes the vault to AI agents with read-only tools `list`, `read`, and
+  `search`. **Opt-in and not bundled** with the app — build it separately and
+  point your agent at it. Reuses the app's Rust I/O; zero new runtime
+  dependencies; reads are guarded against path traversal outside the vault.
+
 ## [0.2.1] - 2026-06-18
 
 ### Changed
