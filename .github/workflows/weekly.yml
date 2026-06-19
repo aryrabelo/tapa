@@ -1,0 +1,82 @@
+name: Weekly Build
+
+# Artifacts-only build across all platforms, on a weekly schedule. Nothing is
+# released or published — the bundles are uploaded as run artifacts (kept 7
+# days) so we can inspect them, and the macOS build also runs the size gate.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.id }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            id: macos-aarch64
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            id: macos-x86_64
+          - platform: ubuntu-latest
+            args: ""
+            id: linux
+          - platform: windows-latest
+            args: ""
+            id: windows
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            build-essential
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Inspection-only: skip updater-artifact signing (no secret needed) via the
+      # CI config override. The .app/.dmg still carry the full binary, so the
+      # macOS size gate stays meaningful.
+      - name: Build bundles (no release)
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: '${{ matrix.args }} --config {"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Check artifact sizes against budget
+        if: startsWith(matrix.platform, 'macos')
+        run: node scripts/check-size.mjs
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.id }}
+          path: src-tauri/target/**/release/bundle/**
+          retention-days: 7
+          if-no-files-found: error

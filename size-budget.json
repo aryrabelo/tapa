@@ -1,0 +1,5 @@
+{
+  "_note": "Max bytes per macOS artifact (aarch64). Baseline = measured size at v0.2.1 + ~5% headroom. On overage the CI size gate BLOCKS; a human must review the growth and only then raise these numbers by hand. CI never auto-bumps. See scripts/check-size.mjs.",
+  "dmg": 7182549,
+  "app": 9208800
+}
