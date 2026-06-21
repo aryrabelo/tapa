@@ -1,4 +1,4 @@
-import { PanelLeft } from "@/components/ui/icons";
+import { PanelLeft, Settings } from "@/components/ui/icons";
 import type * as React from "react";
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
@@ -30,6 +30,7 @@ import { livewriteModule } from "@/modules/livewrite";
 import { teleprompterModule } from "@/modules/teleprompter";
 import { brainModule } from "@/modules/brain";
 import { settingsModule } from "@/modules/settings";
+import { TOGGLEABLE_PLUGINS, getDisabledPlugins } from "@/lib/plugins";
 import { ContextMenu } from "@/components/ContextMenu";
 
 // codemirror (~169KB gzip) is only used in edit mode. Load it on demand so the
@@ -58,16 +59,17 @@ const Toaster = lazy(() => import("sonner").then((m) => ({ default: m.Toaster })
 registry.register(searchModule);
 registry.register(findModule);
 
-// Reader plugins: register their ⌘⇧P / ⌘⇧L commands eagerly, then activate them
-// now so their right-click menu items exist before the first command ever runs.
+// Reader/tool plugins: register their commands eagerly, then enable each one
+// (enabling activates it, registering its context-menu items) unless the user
+// turned it off in Settings. Disabled plugins stay registered but inert.
 registry.register(presentationModule);
 registry.register(livewriteModule);
-void registry.activate("presentation");
-void registry.activate("livewrite");
 registry.register(teleprompterModule);
-void registry.activate("teleprompter");
 registry.register(brainModule);
-void registry.activate("brain");
+const disabledPlugins = getDisabledPlugins();
+for (const { id } of TOGGLEABLE_PLUGINS) {
+  registry.setEnabled(id, !disabledPlugins.has(id));
+}
 registry.register(defaultHandlerModule);
 void registry.activate("default-handler");
 registry.register(updaterModule);
@@ -300,6 +302,16 @@ export default function App(): React.ReactElement {
             <kbd className="mr-1 hidden select-none rounded border bg-muted px-1.5 py-0.5 font-mono text-[0.7rem] text-muted-foreground sm:inline-block">
               ⌘K
             </kbd>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              aria-label="Settings"
+              title="Settings (⌘,)"
+              onClick={() => void registry.runCommand("settings.open")}
+            >
+              <Settings className="size-4" />
+            </Button>
             <ThemeToggle />
             {s.root && (
               <>

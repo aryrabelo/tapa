@@ -62,6 +62,7 @@ export interface Registry {
   on(event: string, handler: (payload: unknown) => void): Disposer;
   emit(event: string, payload: unknown): void;
   deactivate(id: string): void;
+  setEnabled(id: string, enabled: boolean): void;
   getPanel(id: string): PanelSpec | undefined;
   activePanel(): string | null;
   subscribePanel(cb: () => void): Disposer;
@@ -75,6 +76,7 @@ export function createRegistry(): Registry {
   const commands = new Map<string, { cmd: Command; moduleId: string }>();
   const modules = new Map<string, Module>();
   const activated = new Set<string>();
+  const disabled = new Set<string>(); // moduleIds the user turned off; gated below
   const disposers = new Map<string, Disposer[]>(); // moduleId -> disposers
   const bus = new Map<string, Set<(p: unknown) => void>>();
   const panels = new Map<string, PanelSpec>();
@@ -179,7 +181,7 @@ export function createRegistry(): Registry {
     },
     async runCommand(id) {
       const entry = commands.get(id);
-      if (!entry) return;
+      if (!entry || disabled.has(entry.moduleId)) return;
       await activate(entry.moduleId);
       await entry.cmd.run(ctxFor(entry.moduleId));
     },
@@ -187,6 +189,20 @@ export function createRegistry(): Registry {
     on,
     emit,
     deactivate(id) {
+      for (const d of disposers.get(id) ?? []) d();
+      disposers.delete(id);
+      activated.delete(id);
+    },
+    setEnabled(id, enabled) {
+      if (enabled) {
+        disabled.delete(id);
+        void activate(id);
+        return;
+      }
+      // Disable = mark gated + tear down what activate() registered (context
+      // items, styles, listeners). Eagerly-registered commands stay in the map
+      // but are skipped by runCommand/runKeybinding via the disabled set.
+      disabled.add(id);
       for (const d of disposers.get(id) ?? []) d();
       disposers.delete(id);
       activated.delete(id);
@@ -201,7 +217,11 @@ export function createRegistry(): Registry {
     },
     runKeybinding(e) {
       for (const entry of commands.values()) {
-        if (entry.cmd.keybinding && matchesBinding(entry.cmd.keybinding, e)) {
+        if (
+          entry.cmd.keybinding &&
+          !disabled.has(entry.moduleId) &&
+          matchesBinding(entry.cmd.keybinding, e)
+        ) {
           void (async () => {
             await activate(entry.moduleId);
             await entry.cmd.run(ctxFor(entry.moduleId));

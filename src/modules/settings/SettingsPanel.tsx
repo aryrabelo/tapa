@@ -4,6 +4,9 @@ import { Monitor, Moon, Sun } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/state/store";
 import { applyTheme, getStoredTheme, setStoredTheme, type Theme } from "@/lib/theme";
+import { Switch } from "@/components/ui/switch";
+import { TOGGLEABLE_PLUGINS, getDisabledPlugins, setPluginDisabled } from "@/lib/plugins";
+import { registry } from "@/lib/registry";
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
   { value: "light", label: "Light", Icon: Sun },
@@ -42,6 +45,19 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   // Pre-fill the real vault path into the MCP commands when a folder is open.
   const vault = useStore((s) => s.root) ?? "/path/to/your/vault";
+  const [disabled, setDisabled] = useState(getDisabledPlugins);
+
+  const togglePlugin = (id: string) => {
+    const nextEnabled = disabled.has(id);
+    setPluginDisabled(id, !nextEnabled);
+    registry.setEnabled(id, nextEnabled);
+    setDisabled((prev) => {
+      const next = new Set(prev);
+      if (nextEnabled) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     applyTheme(theme);
@@ -106,6 +122,33 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
                   </kbd>
                 </li>
               ))}
+            </ul>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-medium">Plugins</h3>
+            <p className="text-xs text-muted-foreground">Turn optional features on or off.</p>
+            <ul className="flex flex-col gap-1 text-sm">
+              {TOGGLEABLE_PLUGINS.map(({ id, label, keys }) => {
+                const enabled = !disabled.has(id);
+                return (
+                  <li key={id} className="flex items-center justify-between">
+                    <span className="text-muted-foreground">
+                      {label}
+                      {keys ? (
+                        <kbd className="ml-2 rounded border bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">
+                          {keys}
+                        </kbd>
+                      ) : null}
+                    </span>
+                    <Switch
+                      checked={enabled}
+                      onChange={() => togglePlugin(id)}
+                      aria-label={`${enabled ? "Disable" : "Enable"} ${label}`}
+                    />
+                  </li>
+                );
+              })}
             </ul>
           </section>
 

@@ -110,6 +110,56 @@ describe("runKeybinding", () => {
   });
 });
 
+describe("setEnabled", () => {
+  const ev = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
+  const rc = (): ReaderContext => ({
+    element: document.body,
+    sourceOffset: null,
+    line: null,
+    selection: "",
+    path: "a.md",
+  });
+
+  it("gates a disabled module's command and keybinding, and restores on re-enable", async () => {
+    const run = vi.fn();
+    const reg = createRegistry();
+    reg.register(
+      makeModule({
+        id: "m",
+        register: (r) => r.command({ id: "c", title: "C", keybinding: "mod+shift+f", run }),
+      }),
+    );
+
+    reg.setEnabled("m", false);
+    await reg.runCommand("c");
+    expect(reg.runKeybinding(ev({ key: "f", metaKey: true, shiftKey: true }))).toBe(false);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(run).not.toHaveBeenCalled();
+
+    reg.setEnabled("m", true);
+    await reg.runCommand("c");
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("disabling tears down context-menu items registered during activate", () => {
+    const reg = createRegistry();
+    reg.register(
+      makeModule({
+        id: "m",
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (ctx) => {
+          ctx.registerContextMenuItem({ id: "i", label: "I", run: () => {} });
+        },
+      }),
+    );
+
+    reg.setEnabled("m", true);
+    expect(reg.contextMenuItems(rc()).some((i) => i.id === "i")).toBe(true);
+    reg.setEnabled("m", false);
+    expect(reg.contextMenuItems(rc()).some((i) => i.id === "i")).toBe(false);
+  });
+});
+
 describe("context-menu items", () => {
   const ctx = (over: Partial<ReaderContext> = {}): ReaderContext => ({
     element: document.createElement("div"),
