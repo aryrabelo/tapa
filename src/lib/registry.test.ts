@@ -255,3 +255,44 @@ describe("registerStyle", () => {
     expect(stylesWith(".tapa-test-style")).toHaveLength(0);
   });
 });
+
+describe("sidebar actions", () => {
+  const Icon = () => null;
+
+  it("exposes order-sorted actions and removes them when the module is disabled", () => {
+    const reg = createRegistry();
+    reg.register(
+      makeModule({
+        id: "m",
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (ctx) => {
+          ctx.registerSidebarAction({ id: "b", label: "B", icon: Icon, run: () => {}, order: 20 });
+          ctx.registerSidebarAction({ id: "a", label: "A", icon: Icon, run: () => {}, order: 10 });
+        },
+      }),
+    );
+
+    reg.setEnabled("m", true);
+    expect(reg.sidebarActions().map((s) => s.id)).toEqual(["a", "b"]);
+    reg.setEnabled("m", false);
+    expect(reg.sidebarActions()).toEqual([]);
+  });
+
+  it("notifies subscribers when actions change", () => {
+    const reg = createRegistry();
+    const cb = vi.fn();
+    reg.subscribeSidebar(cb);
+    reg.register(
+      makeModule({
+        id: "m",
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (ctx) => {
+          ctx.registerSidebarAction({ id: "a", label: "A", icon: Icon, run: () => {} });
+        },
+      }),
+    );
+
+    reg.setEnabled("m", true);
+    expect(cb).toHaveBeenCalled();
+  });
+});

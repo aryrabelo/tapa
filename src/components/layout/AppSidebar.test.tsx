@@ -15,14 +15,14 @@ const tree: FileNode[] = [
 
 describe("AppSidebar", () => {
   it("renders dirs and files", () => {
-    render(<AppSidebar tree={tree} active={null} onPick={() => {}} />);
+    render(<AppSidebar tree={tree} active={null} onPick={() => {}} onNewFile={() => {}} />);
     expect(screen.getByText("docs")).toBeInTheDocument();
     expect(screen.getByText("a.md")).toBeInTheDocument();
     expect(screen.getByText("b.md")).toBeInTheDocument();
   });
 
   it("collapses and expands a directory", () => {
-    render(<AppSidebar tree={tree} active={null} onPick={() => {}} />);
+    render(<AppSidebar tree={tree} active={null} onPick={() => {}} onNewFile={() => {}} />);
     expect(screen.getByText("a.md")).toBeInTheDocument();
     fireEvent.click(screen.getByText("docs")); // collapse
     expect(screen.queryByText("a.md")).not.toBeInTheDocument();
@@ -32,14 +32,26 @@ describe("AppSidebar", () => {
 
   it("calls onPick with the file path on click", () => {
     const onPick = vi.fn();
-    render(<AppSidebar tree={tree} active={null} onPick={onPick} />);
+    render(<AppSidebar tree={tree} active={null} onPick={onPick} onNewFile={() => {}} />);
     fireEvent.click(screen.getByText("b.md"));
     expect(onPick).toHaveBeenCalledWith("b.md");
   });
 
   it("highlights the active file", () => {
-    render(<AppSidebar tree={tree} active="b.md" onPick={() => {}} />);
+    render(<AppSidebar tree={tree} active="b.md" onPick={() => {}} onNewFile={() => {}} />);
     const btn = screen.getByText("b.md").closest("button");
     expect(btn?.className).toContain("bg-accent");
+  });
+
+  it("renders a New file action that calls onNewFile", () => {
+    const onNewFile = vi.fn();
+    render(<AppSidebar tree={tree} active={null} onPick={() => {}} onNewFile={onNewFile} />);
+    fireEvent.click(screen.getByRole("button", { name: "New file" }));
+    expect(onNewFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a hint instead of the tree when no folder is open", () => {
+    render(<AppSidebar tree={[]} active={null} onPick={() => {}} onNewFile={() => {}} />);
+    expect(screen.getByText(/no folder open/i)).toBeInTheDocument();
   });
 });

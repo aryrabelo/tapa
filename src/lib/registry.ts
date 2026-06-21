@@ -36,6 +36,15 @@ export interface ContextMenuItem {
   run: (ctx: ReaderContext) => void;
 }
 
+/** An action button a module contributes to the sidebar's top action bar. */
+export interface SidebarAction {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  run: () => void;
+  order?: number; // lower sorts first; default 100
+}
+
 export interface ModuleContext {
   registerCommand(cmd: Command): void;
   registerPanel(panel: PanelSpec): void;
@@ -45,6 +54,7 @@ export interface ModuleContext {
   hidePanel(): void;
   onDispose(cb: Disposer): void;
   registerContextMenuItem(item: ContextMenuItem): Disposer;
+  registerSidebarAction(action: SidebarAction): Disposer;
   onReaderRender(cb: (container: HTMLElement) => void): Disposer;
   registerStyle(css: string): Disposer;
 }
@@ -69,6 +79,8 @@ export interface Registry {
   runKeybinding(e: KeyboardEvent): boolean;
   activate(id: string): Promise<void>;
   contextMenuItems(ctx: ReaderContext): ContextMenuItem[];
+  sidebarActions(): SidebarAction[];
+  subscribeSidebar(cb: () => void): Disposer;
   emitReaderRender(container: HTMLElement): void;
 }
 
@@ -85,6 +97,9 @@ export function createRegistry(): Registry {
   const contextItems = new Map<string, ContextMenuItem>();
   const readerRenderCbs = new Set<(c: HTMLElement) => void>();
   let lastReaderContainer: HTMLElement | null = null;
+  const sidebarItems = new Map<string, SidebarAction>();
+  const sidebarSubs = new Set<() => void>();
+  let sidebarSnapshot: SidebarAction[] = [];
 
   const record = (moduleId: string, d: Disposer) => {
     const arr = disposers.get(moduleId) ?? [];
@@ -107,6 +122,15 @@ export function createRegistry(): Registry {
 
   const notifyPanel = () => {
     for (const cb of panelSubs) cb();
+  };
+
+  const notifySidebar = () => {
+    // Rebuild a stable, order-sorted snapshot so useSyncExternalStore sees an
+    // unchanged reference between renders (a fresh array each call would loop).
+    sidebarSnapshot = [...sidebarItems.values()].sort(
+      (a, b) => (a.order ?? 100) - (b.order ?? 100),
+    );
+    for (const cb of sidebarSubs) cb();
   };
 
   const ctxFor = (moduleId: string): ModuleContext => ({
@@ -138,6 +162,16 @@ export function createRegistry(): Registry {
       contextItems.set(item.id, item);
       const off = () => {
         contextItems.delete(item.id);
+      };
+      record(moduleId, off);
+      return off;
+    },
+    registerSidebarAction: (action) => {
+      sidebarItems.set(action.id, action);
+      notifySidebar();
+      const off = () => {
+        sidebarItems.delete(action.id);
+        notifySidebar();
       };
       record(moduleId, off);
       return off;
@@ -234,6 +268,13 @@ export function createRegistry(): Registry {
     activate,
     contextMenuItems: (rctx) =>
       [...contextItems.values()].filter((it) => !it.when || it.when(rctx)),
+    sidebarActions: () => sidebarSnapshot,
+    subscribeSidebar(cb) {
+      sidebarSubs.add(cb);
+      return () => {
+        sidebarSubs.delete(cb);
+      };
+    },
     emitReaderRender(container) {
       lastReaderContainer = container;
       for (const cb of readerRenderCbs) cb(container);
@@ -250,6 +291,15 @@ export function useActivePanel(): string | null {
     (cb) => registry.subscribePanel(cb),
     () => registry.activePanel(),
     () => registry.activePanel(),
+  );
+}
+
+/** React hook: the sidebar actions modules have contributed (order-sorted). */
+export function useSidebarActions(): SidebarAction[] {
+  return useSyncExternalStore(
+    (cb) => registry.subscribeSidebar(cb),
+    () => registry.sidebarActions(),
+    () => registry.sidebarActions(),
   );
 }
 

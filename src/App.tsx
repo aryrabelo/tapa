@@ -274,26 +274,24 @@ export default function App(): React.ReactElement {
           <SettingsPanel onClose={() => registry.runCommand("settings.close")} />
         </Suspense>
       )}
-      {s.tree.length > 0 && sidebarOpen && (
+      {sidebarOpen && (
         <Suspense fallback={null}>
-          <AppSidebar tree={s.tree} active={s.activePath} onPick={openFile} />
+          <AppSidebar tree={s.tree} active={s.activePath} onPick={openFile} onNewFile={newFile} />
         </Suspense>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-11 shrink-0 items-center justify-between border-b px-4">
           <div className="flex min-w-0 items-center gap-2">
-            {s.tree.length > 0 && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-7"
-                aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-                title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
-                onClick={() => setSidebarOpen((v) => !v)}
-              >
-                <PanelLeft className="size-4" />
-              </Button>
-            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
+              onClick={() => setSidebarOpen((v) => !v)}
+            >
+              <PanelLeft className="size-4" />
+            </Button>
             <span className="truncate text-sm font-medium text-foreground">
               {folderName ?? "Tapa"}
             </span>

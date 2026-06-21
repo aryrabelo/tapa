@@ -1,5 +1,6 @@
 import type { Module } from "@/lib/registry";
 import { captureIdea, openBrain } from "@/modules/brain/brain";
+import { Brain } from "@/components/ui/icons";
 
 // Brain reader plugin: a default git-backed plain-Markdown ideas vault at
 // ~/brain. ⌘⇧B opens it; ⌘⇧I captures a fresh idea into the inbox. Both are
@@ -32,6 +33,13 @@ export const brainModule: Module = {
       label: "Capture idea",
       group: "Tools",
       run: () => void captureIdea(),
+    });
+    ctx.registerSidebarAction({
+      id: "brain.open",
+      label: "Open brain",
+      icon: Brain,
+      run: () => void openBrain(),
+      order: 20,
     });
   },
 };
