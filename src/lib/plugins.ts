@@ -2,17 +2,39 @@
 // the Module.id registered in App.tsx; the registry gates a disabled plugin's
 // commands, keybindings, and context-menu items. Core plugins (search, find,
 // settings, updater, default-handler) are not listed here — they are always on.
+export interface ConfigField {
+  key: string;
+  label: string;
+  type: "text" | "dir";
+  placeholder?: string;
+  help?: string;
+}
+
 export interface PluginInfo {
   id: string;
   label: string;
   keys?: string; // shortcut glyphs, for display only
+  config?: ConfigField[];
 }
 
 export const TOGGLEABLE_PLUGINS: readonly PluginInfo[] = [
   { id: "teleprompter", label: "Teleprompter", keys: "⌘⇧T" },
   { id: "presentation", label: "Presentation", keys: "⌘⇧P" },
   { id: "livewrite", label: "Live-write", keys: "⌘⇧L" },
-  { id: "brain", label: "Brain", keys: "⌘⇧B" },
+  {
+    id: "brain",
+    label: "Brain",
+    keys: "⌘⇧B",
+    config: [
+      {
+        key: "dir",
+        label: "Vault directory",
+        type: "dir",
+        placeholder: "~/brain",
+        help: "Folder for your ideas vault. Leave blank to use ~/brain.",
+      },
+    ],
+  },
 ];
 
 const STORAGE_KEY = "tapa-disabled-plugins";

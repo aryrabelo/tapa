@@ -1,10 +1,13 @@
+import { getPluginConfigValue } from "@/lib/plugin-config";
 import { ensureBrain, scanTree, watchFolder, writeFile } from "@/lib/tauri";
 import { useStore } from "@/state/store";
 
-// Open the default git-backed ideas vault (~/brain): ensure it exists on disk,
-// scan it into the folder tree, and start watching for live changes.
+// Open the git-backed ideas vault: ensure it exists on disk, scan it into the
+// folder tree, and start watching for live changes. The vault directory is
+// configurable per-plugin; a blank/unset value defaults to ~/brain.
 export async function openBrain(): Promise<void> {
-  const root = await ensureBrain();
+  const dir = getPluginConfigValue("brain", "dir") || undefined;
+  const root = await ensureBrain(dir);
   const files = await scanTree(root);
   useStore.getState().setFolder(root, files);
   try {
@@ -15,7 +18,8 @@ export async function openBrain(): Promise<void> {
 // Capture a fresh idea into the vault's inbox: write a seeded note, open the
 // folder + the new note, and drop the cursor just after the "# " title.
 export async function captureIdea(): Promise<void> {
-  const root = await ensureBrain();
+  const dir = getPluginConfigValue("brain", "dir") || undefined;
+  const root = await ensureBrain(dir);
   const now = new Date().toISOString();
   const date = now.slice(0, 10);
   const hash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);

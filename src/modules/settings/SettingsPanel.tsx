@@ -2,11 +2,14 @@ import type * as React from "react";
 import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useStore } from "@/state/store";
 import { applyTheme, getStoredTheme, setStoredTheme, type Theme } from "@/lib/theme";
 import { Switch } from "@/components/ui/switch";
 import { TOGGLEABLE_PLUGINS, getDisabledPlugins, setPluginDisabled } from "@/lib/plugins";
 import { registry } from "@/lib/registry";
+import { getPluginConfigValue, setPluginConfigValue } from "@/lib/plugin-config";
+import { pickFolder } from "@/lib/tauri";
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
   { value: "light", label: "Light", Icon: Sun },
@@ -46,6 +49,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
   // Pre-fill the real vault path into the MCP commands when a folder is open.
   const vault = useStore((s) => s.root) ?? "/path/to/your/vault";
   const [disabled, setDisabled] = useState(getDisabledPlugins);
+  // Per-plugin config values, keyed `${pluginId}::${key}`, seeded from persistence.
+  const [cfg, setCfg] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const p of TOGGLEABLE_PLUGINS) {
+      for (const field of p.config ?? []) {
+        init[`${p.id}::${field.key}`] = getPluginConfigValue(p.id, field.key) ?? "";
+      }
+    }
+    return init;
+  });
+
+  const updateCfg = (pluginId: string, key: string, value: string) => {
+    setPluginConfigValue(pluginId, key, value);
+    setCfg((prev) => ({ ...prev, [`${pluginId}::${key}`]: value }));
+  };
 
   const togglePlugin = (id: string) => {
     const nextEnabled = disabled.has(id);
@@ -129,23 +147,76 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
             <h3 className="text-sm font-medium">Plugins</h3>
             <p className="text-xs text-muted-foreground">Turn optional features on or off.</p>
             <ul className="flex flex-col gap-1 text-sm">
-              {TOGGLEABLE_PLUGINS.map(({ id, label, keys }) => {
+              {TOGGLEABLE_PLUGINS.map(({ id, label, keys, config }) => {
                 const enabled = !disabled.has(id);
                 return (
-                  <li key={id} className="flex items-center justify-between">
-                    <span className="text-muted-foreground">
-                      {label}
-                      {keys ? (
-                        <kbd className="ml-2 rounded border bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">
-                          {keys}
-                        </kbd>
-                      ) : null}
-                    </span>
-                    <Switch
-                      checked={enabled}
-                      onChange={() => togglePlugin(id)}
-                      aria-label={`${enabled ? "Disable" : "Enable"} ${label}`}
-                    />
+                  <li key={id} className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">
+                        {label}
+                        {keys ? (
+                          <kbd className="ml-2 rounded border bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">
+                            {keys}
+                          </kbd>
+                        ) : null}
+                      </span>
+                      <Switch
+                        checked={enabled}
+                        onChange={() => togglePlugin(id)}
+                        aria-label={`${enabled ? "Disable" : "Enable"} ${label}`}
+                      />
+                    </div>
+                    {config?.length ? (
+                      <div className="mt-1 flex flex-col gap-2 pl-1">
+                        {config.map((field) => {
+                          const fieldId = `plugin-cfg-${id}-${field.key}`;
+                          const value = cfg[`${id}::${field.key}`] ?? "";
+                          return (
+                            <div key={field.key} className="flex flex-col gap-1">
+                              <label
+                                htmlFor={fieldId}
+                                className="text-xs font-medium text-foreground"
+                              >
+                                {field.label}
+                              </label>
+                              {field.help ? (
+                                <p className="text-[0.7rem] text-muted-foreground">{field.help}</p>
+                              ) : null}
+                              {field.type === "dir" ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    id={fieldId}
+                                    value={value}
+                                    placeholder={field.placeholder}
+                                    onChange={(e) =>
+                                      updateCfg(id, field.key, e.currentTarget.value)
+                                    }
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    aria-label={`Browse for ${field.label}`}
+                                    onClick={async () => {
+                                      const p = await pickFolder();
+                                      if (p) updateCfg(id, field.key, p);
+                                    }}
+                                  >
+                                    Browse…
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Input
+                                  id={fieldId}
+                                  value={value}
+                                  placeholder={field.placeholder}
+                                  onChange={(e) => updateCfg(id, field.key, e.currentTarget.value)}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}
