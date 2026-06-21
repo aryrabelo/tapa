@@ -20,6 +20,19 @@ export default defineConfig({
     ],
   },
   clearScreen: false,
+  // main.tsx lazy-loads App and the teleprompter overlay, so vite's cold
+  // dependency scan can't see the @tauri-apps/api submodules behind those
+  // dynamic imports. Pre-bundle them here, otherwise the first dev run
+  // discovers them at runtime, force-reloads mid-load, and the webview aborts
+  // ("Importing a module script failed" -> Rust foreign-exception abort).
+  optimizeDeps: {
+    include: [
+      "@tauri-apps/api/core",
+      "@tauri-apps/api/event",
+      "@tauri-apps/api/webviewWindow",
+      "@tauri-apps/plugin-dialog",
+    ],
+  },
   server: { port: 1420, strictPort: true },
   // Tauri ships a modern WebKit/WebView2 runtime, so skip esbuild downleveling
   // and emit modern JS — fewer transpile helpers across the whole bundle.

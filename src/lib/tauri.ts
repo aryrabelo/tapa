@@ -3,6 +3,8 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 
 export const scanTree = (root: string): Promise<string[]> =>
   invoke<string[]>("scan_tree", { root });
+export const ensureBrain = (path?: string): Promise<string> =>
+  invoke<string>("ensure_brain", { path: path ?? null });
 export const readFile = (path: string): Promise<string> => invoke<string>("read_file", { path });
 export const writeFile = (path: string, content: string): Promise<void> =>
   invoke<void>("write_file", { path, content });

@@ -2,6 +2,7 @@ import type * as React from "react";
 import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
+import { useStore } from "@/state/store";
 import { applyTheme, getStoredTheme, setStoredTheme, type Theme } from "@/lib/theme";
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
@@ -19,8 +20,19 @@ const SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "⌘S", label: "Save" },
   { keys: "⌘⇧L", label: "Live-write" },
   { keys: "⌘⇧P", label: "Presentation" },
+  { keys: "⌘⇧T", label: "Teleprompter" },
+  { keys: "⌘⇧B", label: "Open brain" },
+  { keys: "⌘⇧I", label: "Capture idea" },
   { keys: "⌘,", label: "Settings" },
 ];
+
+function Code({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <pre className="overflow-x-auto rounded-md border bg-muted px-2.5 py-1.5 font-mono text-[0.72rem] leading-relaxed text-foreground/90 select-text">
+      {children}
+    </pre>
+  );
+}
 
 // Plain-div modal (no radix Dialog: the unified `radix-ui` Dialog renders an
 // "[object Object]" QName under preact/compat in this app). The backdrop is a
@@ -28,6 +40,8 @@ const SHORTCUTS: { keys: string; label: string }[] = [
 // closes via the document listener.
 export function SettingsPanel({ onClose }: { onClose: () => void }): React.ReactElement {
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
+  // Pre-fill the real vault path into the MCP commands when a folder is open.
+  const vault = useStore((s) => s.root) ?? "/path/to/your/vault";
 
   useEffect(() => {
     applyTheme(theme);
@@ -47,7 +61,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[10vh]"
     >
       <button
         type="button"
@@ -56,11 +70,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
         className="absolute inset-0 bg-black/10 supports-backdrop-filter:backdrop-blur-xs"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-md rounded-xl bg-popover p-5 text-popover-foreground shadow-md ring-1 ring-foreground/10">
+      <div className="relative max-h-[80vh] w-full max-w-md overflow-y-auto rounded-xl bg-popover p-5 text-popover-foreground shadow-md ring-1 ring-foreground/10">
         <h2 className="text-base font-semibold">Settings</h2>
-        <p className="mb-4 text-xs text-muted-foreground">Appearance and keyboard shortcuts.</p>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Appearance, shortcuts, and agent access.
+        </p>
 
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-6">
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Theme</h3>
             <div className="flex gap-2">
@@ -93,9 +109,48 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
             </ul>
           </section>
 
-          <p className="text-xs text-muted-foreground">
-            Agent access (MCP): the tapa-mcp server exposes this vault to coding agents over stdio.
-          </p>
+          <section className="flex flex-col gap-3">
+            <h3 className="text-sm font-medium">Agent access (MCP)</h3>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Tapa ships an optional <code className="font-mono">tapa-mcp</code> server that exposes
+              this vault to a coding agent (Claude Code, Cursor, …) over stdio — read, search, and
+              live file subscriptions, plus write with <code className="font-mono">--write</code>.
+              It is a separate binary, not bundled, so the reader stays ~5&nbsp;MB.
+            </p>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium">1. Build it once</span>
+              <Code>cd src-tauri &amp;&amp; cargo build --release --bin tapa-mcp</Code>
+              <span className="text-[0.7rem] text-muted-foreground">
+                Output: <code className="font-mono">src-tauri/target/release/tapa-mcp</code>
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium">2. Register it with Claude Code</span>
+              <Code>{`claude mcp add tapa -- \\\n  /abs/path/to/tapa-mcp \\\n  ${vault}`}</Code>
+              <span className="text-[0.7rem] text-muted-foreground">
+                Add <code className="font-mono">--write</code> at the end for append / patch /
+                focus; omit it for read-only.
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium">3. Or Claude Desktop</span>
+              <span className="text-[0.7rem] text-muted-foreground">
+                Add the same command under <code className="font-mono">mcpServers.tapa</code> in
+                <code className="font-mono"> claude_desktop_config.json</code>:
+              </span>
+              <Code>{`{
+  "mcpServers": {
+    "tapa": {
+      "command": "/abs/path/to/tapa-mcp",
+      "args": ["${vault}"]
+    }
+  }
+}`}</Code>
+            </div>
+          </section>
         </div>
       </div>
     </div>

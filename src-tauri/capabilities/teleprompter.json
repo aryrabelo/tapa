@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "teleprompter",
+  "description": "Teleprompter overlay window permissions.",
+  "windows": ["teleprompter"],
+  "permissions": ["core:default", "core:window:allow-close"]
+}

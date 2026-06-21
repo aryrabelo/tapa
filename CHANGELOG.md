@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Teleprompter (`⌘⇧T`): a macOS overlay that auto-scrolls the open document as
+  plain text so you can read while looking at the camera. It rides in the notch
+  zone above the menu bar, floats over fullscreen apps, and never steals
+  keyboard focus (a non-activating `NSPanel`). Hover for play/pause, speed, font
+  and mirror controls; `Space` pauses, `↑`/`↓` change speed, `Esc` closes.
+  First-party `teleprompter` registry module; opens via `⌘⇧T`, the command
+  palette, or the right-click menu.
+- Brain (`⌘⇧B` open / `⌘⇧I` capture): a default git-backed plain-Markdown ideas
+  vault at `~/brain`, kept outside any project repo. `⌘⇧B` opens the vault in
+  Tapa; `⌘⇧I` captures a fresh inbox note (`inbox/YYYY-MM-DD-<hash>.md`, seeded
+  with a Compiled-truth + Timeline scaffold) and drops you straight into edit
+  mode. The vault is created and `git init`'d on first use. First-party `brain`
+  registry module; both actions are also in the right-click "Tools" menu.
+
 ## [0.3.0] - 2026-06-19
 
 ### Added

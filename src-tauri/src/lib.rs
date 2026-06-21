@@ -1,7 +1,9 @@
+mod brain;
 mod commands;
 mod default_handler;
 pub mod fs_tree;
 pub mod search;
+mod teleprompter;
 mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -44,6 +46,8 @@ pub fn run() {
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
                 app.handle().plugin(tauri_plugin_process::init())?;
             }
+            #[cfg(target_os = "macos")]
+            app.handle().plugin(tauri_nspanel::init())?;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -63,7 +67,9 @@ pub fn run() {
             commands::search_content,
             commands::is_default_markdown_handler,
             commands::set_default_markdown_handler,
-            watcher::watch_folder
+            watcher::watch_folder,
+            teleprompter::setup_overlay,
+            brain::ensure_brain
         ])
         .on_menu_event(|app, event| {
             if event.id() == "new-file" {
