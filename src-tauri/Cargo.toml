@@ -38,6 +38,11 @@ regex = "1"
 memchr = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+# CORS-free AssemblyAI streaming-token mint for the optional bug-capture
+# overlay. reqwest is already in the tree via tauri-plugin-updater (with its
+# rustls TLS stack), so we inherit that stack via feature unification and add
+# no new features here — negligible binary weight, no provider conflict.
+reqwest = { version = "0.13", default-features = false }
 
 # macOS-only: CFString FFI for LaunchServices default-handler commands.
 [target.'cfg(target_os = "macos")'.dependencies]

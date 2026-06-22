@@ -22,6 +22,7 @@
 - [⌨️ Keyboard shortcuts](#️-keyboard-shortcuts)
 - [📦 Install](#-install)
 - [🤖 Agent access (MCP)](#-agent-access-mcp)
+- [🐞 Bug capture (dev)](#-bug-capture-dev)
 - [🛠️ How it's built](#️-how-its-built)
 - [🗂️ Project layout](#️-project-layout)
 - [✅ Verification](#-verification)
@@ -161,6 +162,30 @@ claude mcp add tapa -- /absolute/path/to/tapa-mcp /absolute/path/to/your/vault
 # read + write (append/patch) — omit --write for read-only:
 claude mcp add tapa -- /absolute/path/to/tapa-mcp /absolute/path/to/your/vault --write
 ```
+
+## 🐞 Bug capture (dev)
+
+Tapa can mount an optional, in-app **bug-capture overlay**
+([bugtoprompt](https://github.com/aryrabelo/bugtoprompt)) that turns a bug into
+an AI-ready prompt: it records your clicks, interactive DOM snapshots, and an
+optional live voice narration, then lets you **copy** or **download** the
+rendered prompt to paste into your AI tool of choice.
+
+It is a developer tool, off by default, and fully removed from normal builds.
+To enable it, copy `.env.example` to `.env` and set the flags:
+
+```sh
+cp .env.example .env
+# .env
+VITE_BUGTOPROMPT=1
+VITE_ASSEMBLYAI_API_KEY=your-assemblyai-key   # optional, for voice transcription
+```
+
+Then run `npm run tauri dev`. A floating bug button appears in the bottom-right.
+Voice transcription uses [AssemblyAI](https://www.assemblyai.com/); the key
+stays local (read from your `.env`) and the streaming token is minted natively
+in Rust so it works inside the desktop webview. Without a key, click + DOM
+capture and copy/download still work — only the voice caption is disabled.
 
 ## 🛠️ How it's built
 

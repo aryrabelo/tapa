@@ -9,6 +9,8 @@
 -->
 <plist version="1.0">
 <dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Tapa uses the microphone to transcribe your narration when you record a bug report with the optional in-app capture overlay.</string>
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>

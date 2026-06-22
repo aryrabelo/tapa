@@ -70,7 +70,8 @@ pub fn run() {
             commands::set_default_markdown_handler,
             watcher::watch_folder,
             teleprompter::setup_overlay,
-            brain::ensure_brain
+            brain::ensure_brain,
+            commands::mint_assemblyai_token
         ])
         .on_menu_event(|app, event| {
             if event.id() == "new-file" {

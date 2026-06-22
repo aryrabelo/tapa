@@ -46,3 +46,9 @@ ReactDOM.createRoot(rootEl).render(
     </Suspense>
   </React.StrictMode>,
 );
+
+// Optional dev bug-capture overlay. Gated on VITE_BUGTOPROMPT so the default
+// release build dead-code-eliminates the dynamic import (zero added bytes).
+if (import.meta.env.VITE_BUGTOPROMPT && currentLabel() === "main") {
+  void import("./bugtoprompt").then((m) => m.mountBugToPrompt());
+}

@@ -142,3 +142,26 @@ mod tests {
         assert!(create_path(path, true).is_ok());
     }
 }
+
+/// Mint a short-lived AssemblyAI streaming token from Rust, bypassing the
+/// browser CORS that blocks the v3 token endpoint inside a WKWebView. The
+/// streaming WebSocket the frontend opens with this token is CORS-exempt.
+/// Wired to the overlay via `window.__BUGTOPROMPT__.mintStreamingToken`.
+#[tauri::command]
+pub async fn mint_assemblyai_token(api_key: String) -> Result<String, String> {
+    let resp = reqwest::Client::new()
+        .get("https://streaming.assemblyai.com/v3/token?expires_in_seconds=300")
+        .header("Authorization", api_key)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("AssemblyAI token mint failed: {}", resp.status()));
+    }
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    json.get("token")
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "AssemblyAI token response missing .token field".to_string())
+}

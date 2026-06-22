@@ -31,6 +31,7 @@ export default defineConfig({
       "@tauri-apps/api/event",
       "@tauri-apps/api/webviewWindow",
       "@tauri-apps/plugin-dialog",
+      "bugtoprompt",
     ],
   },
   server: { port: 1420, strictPort: true },
