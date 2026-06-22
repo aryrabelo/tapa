@@ -147,8 +147,12 @@ body {
 }
 
 @keyframes tapa-saved-flash {
-  0% { border-color: rgba(255, 255, 255, 0.9); }
-  100% { border-color: transparent; }
+  0% {
+    border-color: rgba(255, 255, 255, 0.9);
+  }
+  100% {
+    border-color: transparent;
+  }
 }
 .tapa-saved-flash {
   animation: tapa-saved-flash 1.2s ease-out forwards;

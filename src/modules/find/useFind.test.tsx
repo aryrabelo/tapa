@@ -32,6 +32,8 @@ afterEach(() => {
 describe("useFind", () => {
   it("counts matches in the rendered reader text", async () => {
     useStore.getState().setActive("x.md", "the quick brown fox jumps over the lazy fox");
+    // Find is reader-mode only; setActive now defaults to edit mode, so switch back.
+    useStore.getState().exitEdit();
     const reader = document.createElement("article");
     reader.setAttribute("data-reader", "");
     reader.textContent = "the quick brown fox jumps over the lazy fox";
