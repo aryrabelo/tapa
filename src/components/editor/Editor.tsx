@@ -2,8 +2,10 @@ import type * as React from "react";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef } from "react";
+import { livePreview } from "./live-preview";
+import { livePreviewTheme } from "./live-preview-theme";
 
 interface Props {
   doc: string;
@@ -24,7 +26,6 @@ export function Editor({ doc, cursor, onChange, onExit, onSave }: Props): React.
       doc,
       selection: { anchor: Math.min(cursor, doc.length) },
       extensions: [
-        lineNumbers(),
         history(),
         keymap.of([
           {
@@ -43,43 +44,8 @@ export function Editor({ doc, cursor, onChange, onExit, onSave }: Props): React.
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange(u.state.doc.toString());
         }),
-        EditorView.theme({
-          "&": {
-            height: "100%",
-            backgroundColor: "transparent",
-            color: "var(--foreground)",
-            fontSize: "15px",
-          },
-          ".cm-scroller": {
-            fontFamily: 'ui-monospace, "SF Mono", "Menlo", monospace',
-            lineHeight: "1.6",
-          },
-          ".cm-content": {
-            maxWidth: "720px",
-            margin: "0 auto",
-            padding: "1rem",
-            caretColor: "var(--foreground)",
-          },
-          ".cm-cursor, .cm-dropCursor": {
-            borderLeftColor: "var(--foreground)",
-            borderLeftWidth: "2px",
-          },
-          "&.cm-focused .cm-cursor": {
-            borderLeftColor: "var(--foreground)",
-          },
-          ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, .cm-content ::selection":
-            {
-              backgroundColor: "color-mix(in oklch, var(--ring) 35%, transparent)",
-            },
-          ".cm-gutters": {
-            backgroundColor: "transparent",
-            color: "var(--muted-foreground)",
-            border: "none",
-          },
-          "&.cm-focused": { outline: "none" },
-          ".cm-activeLine": { backgroundColor: "transparent" },
-          ".cm-activeLineGutter": { backgroundColor: "transparent" },
-        }),
+        livePreview,
+        livePreviewTheme,
       ],
     });
     const v = new EditorView({ state, parent: host.current });
