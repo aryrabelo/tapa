@@ -63,6 +63,7 @@ pub fn run() {
             commands::scan_tree,
             commands::read_file,
             commands::write_file,
+            commands::create_path,
             commands::take_pending_open,
             commands::search_content,
             commands::is_default_markdown_handler,

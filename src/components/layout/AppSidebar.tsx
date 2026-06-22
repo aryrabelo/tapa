@@ -77,13 +77,32 @@ export function AppSidebar({
   active,
   onPick,
   onNewFile,
+  onCreate,
 }: {
   tree: FileNode[];
   active: string | null;
   onPick: (p: string) => void;
   onNewFile: () => void;
+  onCreate: (rel: string, dir: boolean) => void;
 }): React.ReactElement {
   const actions = useSidebarActions();
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+
+  // ponytail: one input for both kinds. A trailing "/" means a folder; nested
+  // paths create intermediate dirs. A file with no extension gets ".md".
+  function submit() {
+    const raw = name.trim();
+    const dir = raw.endsWith("/");
+    let rel = raw.replace(/\/+$/, "");
+    if (!dir && rel) {
+      const base = rel.split("/").pop() ?? rel;
+      if (!base.includes(".")) rel += ".md";
+    }
+    setName("");
+    setCreating(false);
+    if (rel) onCreate(rel, dir);
+  }
   return (
     <div className="flex h-full w-[260px] shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
       <div className="flex items-center gap-1 border-b px-2 py-1.5">
@@ -116,9 +135,47 @@ export function AppSidebar({
       </div>
       {tree.length > 0 ? (
         <>
-          <div className="px-3 pt-3 pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Files
+          <div className="flex items-center justify-between px-3 pt-3 pb-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Files
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-5 text-muted-foreground"
+              aria-label="New file or folder"
+              title="New file or folder — end the name with / for a folder"
+              onClick={() => setCreating((v) => !v)}
+            >
+              <span aria-hidden className="text-base leading-none">
+                +
+              </span>
+            </Button>
           </div>
+          {creating && (
+            <div className="px-2 pb-1">
+              <input
+                // biome-ignore lint/a11y/noAutofocus: the input only mounts on an explicit "+" click
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submit();
+                  else if (e.key === "Escape") {
+                    setName("");
+                    setCreating(false);
+                  }
+                }}
+                onBlur={() => {
+                  setName("");
+                  setCreating(false);
+                }}
+                placeholder="name.md — end with / for a folder"
+                aria-label="New entry name"
+                className="w-full rounded-md border bg-background px-2 py-1 text-[0.8rem] outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          )}
           <ScrollArea className="min-h-0 flex-1">
             <div className="px-1 pb-2">
               {tree.map((n) => (
