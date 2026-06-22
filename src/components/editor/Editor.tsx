@@ -3,7 +3,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { livePreview } from "./live-preview";
 import { livePreviewTheme } from "./live-preview-theme";
 
@@ -13,9 +13,18 @@ interface Props {
   onChange: (doc: string) => void;
   onExit: () => void; // double-click exits edit mode
   onSave: () => void; // Cmd/Ctrl-S
+  onBlurSave: () => Promise<boolean>; // autosave on blur; resolves true iff it saved
 }
 
-export function Editor({ doc, cursor, onChange, onExit, onSave }: Props): React.ReactElement {
+export function Editor({
+  doc,
+  cursor,
+  onChange,
+  onExit,
+  onSave,
+  onBlurSave,
+}: Props): React.ReactElement {
+  const [saved, setSaved] = useState(false);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
 
@@ -40,6 +49,18 @@ export function Editor({ doc, cursor, onChange, onExit, onSave }: Props): React.
           ...historyKeymap,
         ]),
         markdown(),
+        EditorView.domEventHandlers({
+          blur: () => {
+            void onBlurSave().then((didSave) => {
+              if (didSave) setSaved(true);
+            });
+            return false;
+          },
+          focus: () => {
+            setSaved(false);
+            return false;
+          },
+        }),
         EditorView.lineWrapping,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChange(u.state.doc.toString());
@@ -57,6 +78,12 @@ export function Editor({ doc, cursor, onChange, onExit, onSave }: Props): React.
     };
   }, []);
 
-  // biome-ignore lint/a11y/noStaticElementInteractions: double-click on the editor host enters/exits edit mode; a keyboard/command-palette equivalent is provided elsewhere.
-  return <div ref={host} className="h-full" onDoubleClick={onExit} />;
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: double-click on the editor host enters/exits edit mode; a keyboard/command-palette equivalent is provided elsewhere.
+    <div
+      ref={host}
+      className={`h-full border border-transparent${saved ? " tapa-saved-flash" : ""}`}
+      onDoubleClick={onExit}
+    />
+  );
 }
