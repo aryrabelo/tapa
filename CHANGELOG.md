@@ -19,7 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Tapa; `⌘⇧I` captures a fresh inbox note (`inbox/YYYY-MM-DD-<hash>.md`, seeded
   with a Compiled-truth + Timeline scaffold) and drops you straight into edit
   mode. The vault is created and `git init`'d on first use. First-party `brain`
-  registry module; both actions are also in the right-click "Tools" menu.
+  registry module; both actions are also in the right-click "Tools" menu, and
+  "Open Brain" is offered on the welcome screen beside "Open Folder".
 
 ## [0.3.0] - 2026-06-19
 

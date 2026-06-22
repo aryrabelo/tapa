@@ -52,6 +52,7 @@ import {
 import { toast } from "sonner";
 import App from "./App";
 import { useStore } from "@/state/store";
+import { registry } from "@/lib/registry";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -80,6 +81,13 @@ describe("App", () => {
     // Welcome owns the open actions exactly once; the header has none yet.
     expect(screen.getAllByRole("button", { name: /open folder/i })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /open file/i })).toHaveLength(1);
+  });
+
+  it("runs brain.open from the welcome screen's Open Brain button", () => {
+    const run = vi.spyOn(registry, "runCommand").mockResolvedValue(undefined);
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /open brain/i }));
+    expect(run).toHaveBeenCalledWith("brain.open");
   });
 
   it("renders without crashing when the Tauri runtime is unavailable", async () => {

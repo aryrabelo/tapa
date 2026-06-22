@@ -337,6 +337,15 @@ export default function App(): React.ReactElement {
                 <Button size="sm" variant="ghost" onClick={openSingleFile}>
                   Open File
                 </Button>
+                {!getDisabledPlugins().has("brain") && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void registry.runCommand("brain.open")}
+                  >
+                    Open Brain
+                  </Button>
+                )}
               </div>
             </div>
           )}
