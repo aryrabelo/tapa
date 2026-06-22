@@ -39,9 +39,9 @@ export const useStore = create<AppState>((set) => ({
     set({
       activePath: path,
       content,
-      mode: "reader",
+      mode: "edit",
       dirty: false,
-      editOffset: null,
+      editOffset: 0,
       scrollLine: null,
     }),
   setContent: (content) => set({ content, dirty: true }),

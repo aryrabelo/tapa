@@ -28,13 +28,24 @@ vi.mock("sonner", () => ({
 // Stub the CodeMirror-backed Editor so jsdom never instantiates it; expose the
 // exit/save handlers as plain buttons so the shell wiring can be driven.
 vi.mock("@/components/editor/Editor", () => ({
-  Editor: ({ onExit, onSave }: { onExit: () => void; onSave: () => void }) => (
+  Editor: ({
+    onExit,
+    onSave,
+    onBlurSave,
+  }: {
+    onExit: () => void;
+    onSave: () => void;
+    onBlurSave: () => void;
+  }) => (
     <div data-testid="editor-stub">
       <button type="button" onClick={onExit}>
         exit
       </button>
       <button type="button" onClick={onSave}>
         save
+      </button>
+      <button type="button" onClick={() => onBlurSave()}>
+        blur
       </button>
     </div>
   ),
@@ -206,11 +217,50 @@ describe("App", () => {
       expect(s.activePath).toBe("note.md");
       expect(s.files).toEqual(["note.md"]);
     });
-    // The single file appears in the sidebar (and the reader metadata header).
+    // The file opens in edit mode now, so "note.md" comes from the sidebar.
     expect(screen.getAllByText("note.md").length).toBeGreaterThan(0);
     // read with the absolute path, watch scoped to the parent
     expect(readFile).toHaveBeenCalledWith("/a/b/note.md");
     expect(watchFolder).toHaveBeenCalledWith("/a/b");
+  });
+
+  it("opens a file directly in edit mode", async () => {
+    vi.mocked(pickFile).mockResolvedValue("/a/b/note.md");
+    vi.mocked(readFile).mockResolvedValue("# Note\n\nbody");
+    vi.mocked(watchFolder).mockResolvedValue(undefined);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /open file/i }));
+
+    await waitFor(() => {
+      expect(useStore.getState().activePath).toBe("note.md");
+      expect(useStore.getState().mode).toBe("edit");
+    });
+  });
+
+  it("autosaves silently on blur only when dirty, staying in edit mode", async () => {
+    vi.mocked(writeFile).mockResolvedValue(undefined);
+    act(() => {
+      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setActive("a.md", "hello");
+      useStore.getState().enterEdit(0);
+    });
+
+    render(<App />);
+    expect(await screen.findByTestId("editor-stub")).toBeInTheDocument();
+
+    // Clean: blur must not write.
+    fireEvent.click(screen.getByRole("button", { name: "blur" }));
+    await Promise.resolve();
+    expect(writeFile).not.toHaveBeenCalled();
+
+    // Dirty: blur saves silently and stays in edit mode.
+    act(() => useStore.getState().setContent("changed"));
+    fireEvent.click(screen.getByRole("button", { name: "blur" }));
+    await waitFor(() => expect(writeFile).toHaveBeenCalled());
+    expect(useStore.getState().mode).toBe("edit");
+    expect(useStore.getState().dirty).toBe(false);
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("opens a file delivered by the OS on launch (default-app association)", async () => {

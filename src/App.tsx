@@ -232,13 +232,13 @@ export default function App(): React.ReactElement {
     }
   }
 
-  async function save(): Promise<boolean> {
+  async function save(silent = false): Promise<boolean> {
     const { root, activePath, content } = useStore.getState();
     if (!root || !activePath) return false;
     try {
       await writeFile(`${root}/${activePath}`, content);
       useStore.getState().markSaved();
-      toast.success("Saved");
+      if (!silent) toast.success("Saved");
       return true;
     } catch (e) {
       // Editor stays open and dirty is preserved so the user can retry.
@@ -251,6 +251,13 @@ export default function App(): React.ReactElement {
   // success. A failed save returns false, leaving the editor open and dirty.
   const exitOnSave = async (): Promise<void> => {
     if (await save()) useStore.getState().exitEdit();
+  };
+
+  // Blur autosaves only when dirty; the white-border flash is the confirmation,
+  // so the save is silent and edit mode is preserved.
+  const saveOnBlur = async (): Promise<boolean> => {
+    if (!useStore.getState().dirty) return false;
+    return await save(true); // silent; the border flash is the confirmation
   };
 
   useOsOpen(openFileByPath);
@@ -402,6 +409,7 @@ export default function App(): React.ReactElement {
                 onChange={(d) => useStore.getState().setContent(d)}
                 onExit={exitOnSave}
                 onSave={exitOnSave}
+                onBlurSave={saveOnBlur}
               />
             </Suspense>
           )}
