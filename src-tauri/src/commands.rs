@@ -38,6 +38,24 @@ pub fn write_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(PathBuf::from(&path), content).map_err(|e| e.to_string())
 }
 
+/// Create a new file or directory at `path` (absolute), making parent dirs as
+/// needed. Files are seeded empty and refuse to clobber an existing entry;
+/// directories use `create_dir_all` (idempotent). Used by the sidebar "+".
+#[tauri::command]
+pub fn create_path(path: String, dir: bool) -> Result<(), String> {
+    let p = PathBuf::from(&path);
+    if dir {
+        return std::fs::create_dir_all(&p).map_err(|e| e.to_string());
+    }
+    if p.exists() {
+        return Err(format!("{path} already exists"));
+    }
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&p, "").map_err(|e| e.to_string())
+}
+
 /// Stream content-search hits to the frontend over a Channel. Returns
 /// immediately; the walk runs on a background thread and stops when the
 /// Channel is closed (frontend cancellation / superseded query).
@@ -99,5 +117,28 @@ mod tests {
         let f = dir.path().join("bin.md");
         fs::write(&f, [0xff, 0xfe, 0x00]).unwrap();
         assert!(read_file(f.to_string_lossy().to_string()).is_err());
+    }
+
+    #[test]
+    fn create_path_makes_nested_file_and_refuses_clobber() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("sub/idea.md");
+        let path = f.to_string_lossy().to_string();
+        create_path(path.clone(), false).unwrap();
+        assert!(f.exists());
+        assert_eq!(read_file(path.clone()).unwrap(), "");
+        // Second create on the same file path is an error (no clobber).
+        assert!(create_path(path, false).is_err());
+    }
+
+    #[test]
+    fn create_path_makes_dir_idempotently() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path().join("topics/rust");
+        let path = d.to_string_lossy().to_string();
+        create_path(path.clone(), true).unwrap();
+        assert!(d.is_dir());
+        // create_dir_all is idempotent: a repeat is still Ok.
+        assert!(create_path(path, true).is_ok());
     }
 }

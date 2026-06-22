@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Sidebar "+" beside the **Files** header creates a new file or folder *inside
+  the open folder* (e.g. the Brain vault) — no more native Save dialog that
+  defaults to an unrelated directory. Type a name and press Enter; end it with
+  `/` for a folder, and nested paths (`topics/idea.md`) create intermediate
+  dirs. New files open straight into edit mode. Backed by a `create_path`
+  command (parent-creating, refuses to clobber an existing file).
 - Teleprompter (`⌘⇧T`): a macOS overlay that auto-scrolls the open document as
   plain text so you can read while looking at the camera. It rides in the notch
   zone above the menu bar, floats over fullscreen apps, and never steals
@@ -19,7 +25,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Tapa; `⌘⇧I` captures a fresh inbox note (`inbox/YYYY-MM-DD-<hash>.md`, seeded
   with a Compiled-truth + Timeline scaffold) and drops you straight into edit
   mode. The vault is created and `git init`'d on first use. First-party `brain`
-  registry module; both actions are also in the right-click "Tools" menu.
+  registry module; both actions are also in the right-click "Tools" menu, and
+  "Open Brain" is offered on the welcome screen beside "Open Folder".
 
 ## [0.3.0] - 2026-06-19
 

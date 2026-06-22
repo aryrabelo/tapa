@@ -8,6 +8,8 @@ export const ensureBrain = (path?: string): Promise<string> =>
 export const readFile = (path: string): Promise<string> => invoke<string>("read_file", { path });
 export const writeFile = (path: string, content: string): Promise<void> =>
   invoke<void>("write_file", { path, content });
+export const createPath = (path: string, dir: boolean): Promise<void> =>
+  invoke<void>("create_path", { path, dir });
 export const watchFolder = (root: string): Promise<void> => invoke<void>("watch_folder", { root });
 export const takePendingOpen = (): Promise<string[]> => invoke<string[]>("take_pending_open");
 export const isDefaultMarkdownHandler = (): Promise<boolean> =>

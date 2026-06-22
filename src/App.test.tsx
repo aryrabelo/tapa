@@ -15,6 +15,7 @@ vi.mock("@/lib/tauri", () => ({
   scanTree: vi.fn(),
   readFile: vi.fn(),
   writeFile: vi.fn(),
+  createPath: vi.fn(),
   watchFolder: vi.fn(),
   takePendingOpen: vi.fn(() => Promise.resolve([])),
   pickFolder: vi.fn(() => Promise.resolve(null)),
@@ -41,6 +42,7 @@ vi.mock("@/components/editor/Editor", () => ({
 
 import { listen } from "@tauri-apps/api/event";
 import {
+  createPath,
   pickFile,
   pickFolder,
   readFile,
@@ -52,6 +54,7 @@ import {
 import { toast } from "sonner";
 import App from "./App";
 import { useStore } from "@/state/store";
+import { registry } from "@/lib/registry";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -80,6 +83,13 @@ describe("App", () => {
     // Welcome owns the open actions exactly once; the header has none yet.
     expect(screen.getAllByRole("button", { name: /open folder/i })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /open file/i })).toHaveLength(1);
+  });
+
+  it("runs brain.open from the welcome screen's Open Brain button", () => {
+    const run = vi.spyOn(registry, "runCommand").mockResolvedValue(undefined);
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /open brain/i }));
+    expect(run).toHaveBeenCalledWith("brain.open");
   });
 
   it("renders without crashing when the Tauri runtime is unavailable", async () => {
@@ -119,6 +129,51 @@ describe("App", () => {
     // and the no-file hint in main carries none.
     expect(screen.getAllByRole("button", { name: /open folder/i })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /open file/i })).toHaveLength(1);
+  });
+
+  it("creates a new file relative to the open folder via the sidebar +", async () => {
+    vi.mocked(pickFolder).mockResolvedValue("/vault");
+    vi.mocked(scanTree).mockResolvedValueOnce(["a.md"]).mockResolvedValueOnce(["a.md", "idea.md"]);
+    vi.mocked(watchFolder).mockResolvedValue(undefined);
+    vi.mocked(createPath).mockResolvedValue(undefined);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
+    expect(await screen.findByText("a.md")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /new file or folder/i }));
+    const input = screen.getByRole("textbox", { name: /new entry name/i });
+    fireEvent.change(input, { target: { value: "idea" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    // Root-relative path, ".md" appended, and the new file opens in edit mode.
+    await waitFor(() => {
+      expect(createPath).toHaveBeenCalledWith("/vault/idea.md", false);
+      expect(useStore.getState().activePath).toBe("idea.md");
+      expect(useStore.getState().mode).toBe("edit");
+    });
+  });
+
+  it("creates a directory when the name ends with a slash", async () => {
+    vi.mocked(pickFolder).mockResolvedValue("/vault");
+    vi.mocked(scanTree).mockResolvedValue(["a.md"]);
+    vi.mocked(watchFolder).mockResolvedValue(undefined);
+    vi.mocked(createPath).mockResolvedValue(undefined);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
+    expect(await screen.findByText("a.md")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /new file or folder/i }));
+    const input = screen.getByRole("textbox", { name: /new entry name/i });
+    fireEvent.change(input, { target: { value: "topics/" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(createPath).toHaveBeenCalledWith("/vault/topics", true);
+    });
+    // A bare directory stays in reader mode (no file opened).
+    expect(useStore.getState().mode).toBe("reader");
   });
 
   it("toggles the sidebar open and closed", async () => {

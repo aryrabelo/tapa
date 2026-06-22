@@ -5,6 +5,7 @@ import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import {
+  createPath,
   pickFile,
   pickFolder,
   pickSavePath,
@@ -198,6 +199,28 @@ export default function App(): React.ReactElement {
     useStore.getState().enterEdit(0);
   }, [openFileByPath]);
 
+  // Sidebar "+": create a new file or directory relative to the open folder
+  // (no native Save dialog). Files open straight into edit mode; an empty
+  // directory has no markdown yet, so it only appears once it holds a note.
+  const createEntry = useCallback(async (rel: string, dir: boolean) => {
+    const { root } = useStore.getState();
+    if (!root || !rel) return;
+    try {
+      await createPath(`${root}/${rel}`, dir);
+      const files = await scanTree(root);
+      useStore.getState().setFolder(root, files);
+    } catch (e) {
+      toast.error(String(e));
+      return;
+    }
+    if (dir) {
+      toast.success("Folder created — it appears once it has a note.");
+    } else {
+      useStore.getState().setActive(rel, "");
+      useStore.getState().enterEdit(0);
+    }
+  }, []);
+
   async function openFile(rel: string) {
     const { root } = useStore.getState();
     if (!root) return;
@@ -276,7 +299,13 @@ export default function App(): React.ReactElement {
       )}
       {sidebarOpen && (
         <Suspense fallback={null}>
-          <AppSidebar tree={s.tree} active={s.activePath} onPick={openFile} onNewFile={newFile} />
+          <AppSidebar
+            tree={s.tree}
+            active={s.activePath}
+            onPick={openFile}
+            onNewFile={newFile}
+            onCreate={createEntry}
+          />
         </Suspense>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -337,6 +366,15 @@ export default function App(): React.ReactElement {
                 <Button size="sm" variant="ghost" onClick={openSingleFile}>
                   Open File
                 </Button>
+                {!getDisabledPlugins().has("brain") && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void registry.runCommand("brain.open")}
+                  >
+                    Open Brain
+                  </Button>
+                )}
               </div>
             </div>
           )}
