@@ -8,6 +8,14 @@ mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // The rustls stack inherited via feature unification ships no default crypto
+    // provider, so install ring once before any TLS client is built (the
+    // bug-capture overlay's AssemblyAI token mint uses reqwest). Without this,
+    // building a reqwest Client panics. Err means already installed — ignore.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    // Load `.env` into the process environment so the native token mint can read
+    // ASSEMBLYAI_API_KEY. The key stays server-side and never reaches the webview.
+    let _ = dotenvy::dotenv();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -49,6 +57,12 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.handle().plugin(tauri_nspanel::init())?;
             if cfg!(debug_assertions) {
+                // Dev builds: tag the window title so a running dev instance is
+                // visually distinct from the installed release.
+                use tauri::Manager;
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_title("Tapa — DEV");
+                }
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)

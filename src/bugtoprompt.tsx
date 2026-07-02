@@ -21,20 +21,18 @@ declare global {
 }
 
 export function mountBugToPrompt(): void {
-  const apiKey = import.meta.env.VITE_ASSEMBLYAI_API_KEY as string | undefined;
   window.__BUGTOPROMPT__ = {
     ...window.__BUGTOPROMPT__,
     // WKWebView has no reliable getDisplayMedia; capture DOM snapshots only.
     screenshotMode: "off",
     modes: ["clipboard", "download"],
     // The AssemblyAI v3 token mint is CORS-blocked inside the webview, so mint
-    // it in Rust (no CORS); the streaming WebSocket itself is CORS-exempt.
-    ...(apiKey
-      ? {
-          mintStreamingToken: (): Promise<string> =>
-            invoke<string>("mint_assemblyai_token", { apiKey }),
-        }
-      : {}),
+    // it in Rust (no CORS); the streaming WebSocket itself is CORS-exempt. The
+    // key lives only in the host env (never the bundle): Rust reads
+    // ASSEMBLYAI_API_KEY and returns an error when unset, so voice simply stays
+    // disabled without a key — no frontend gate needed.
+    mintStreamingToken: (): Promise<string> =>
+      invoke<string>("mint_assemblyai_token"),
   };
   const host = document.createElement("div");
   host.id = "bugtoprompt-root";

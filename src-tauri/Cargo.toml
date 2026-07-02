@@ -40,9 +40,15 @@ tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 # CORS-free AssemblyAI streaming-token mint for the optional bug-capture
 # overlay. reqwest is already in the tree via tauri-plugin-updater (with its
-# rustls TLS stack), so we inherit that stack via feature unification and add
-# no new features here — negligible binary weight, no provider conflict.
+# rustls TLS stack), so we inherit that stack via feature unification.
+# That inherited stack ships rustls with NO default crypto provider, so we
+# pull `ring` and install it once at startup (see lib.rs) — otherwise building
+# any reqwest Client panics ("No rustls crypto provider is configured").
 reqwest = { version = "0.13", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+# Load `.env` so the native token mint can read ASSEMBLYAI_API_KEY from the
+# host environment — the key is never exposed to the webview bundle.
+dotenvy = "0.15"
 
 # macOS-only: CFString FFI for LaunchServices default-handler commands.
 [target.'cfg(target_os = "macos")'.dependencies]
