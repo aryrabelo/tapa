@@ -14,4 +14,18 @@ describe("buildTree", () => {
     const tree = buildTree(["docs/a.md"]);
     expect(tree[0].children?.[0].path).toBe("docs/a.md");
   });
+
+  it("shows empty directories from trailing-slash entries", () => {
+    const tree = buildTree(["inbox/", "README.md"]);
+    expect(tree.map((n) => n.name)).toEqual(["inbox", "README.md"]);
+    expect(tree[0].kind).toBe("dir");
+    expect(tree[0].children).toEqual([]);
+  });
+
+  it("merges a dir entry with files later nested under it", () => {
+    const tree = buildTree(["inbox/", "inbox/note.md"]);
+    expect(tree).toHaveLength(1);
+    expect(tree[0].kind).toBe("dir");
+    expect(tree[0].children?.map((n) => n.name)).toEqual(["note.md"]);
+  });
 });

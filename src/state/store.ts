@@ -34,7 +34,10 @@ export const useStore = create<AppState>((set) => ({
   editOffset: null,
   scrollLine: null,
 
-  setFolder: (root, files) => set({ root, files, tree: buildTree(files) }),
+  // `files` feeds the ⌘K palette and must stay openable files only; dir entries
+  // (trailing "/") are tree-only, so strip them from the flat list.
+  setFolder: (root, entries) =>
+    set({ root, files: entries.filter((e) => !e.endsWith("/")), tree: buildTree(entries) }),
   setActive: (path, content) =>
     set({
       activePath: path,

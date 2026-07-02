@@ -37,6 +37,39 @@ pub fn scan_markdown(root: &Path) -> Vec<String> {
     out
 }
 
+/// Returns tree entries relative to `root`, forward-slashed, sorted: every
+/// non-hidden directory (suffixed with `/`) plus every markdown file. Unlike
+/// [`scan_markdown`], this surfaces directories that hold no markdown — so the
+/// file tree can show folders like a freshly-seeded, still-empty `inbox/`.
+pub fn scan_tree_entries(root: &Path) -> Vec<String> {
+    let mut out: Vec<String> = WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| e.depth() == 0 || !is_hidden(e))
+        .filter_map(|e| e.ok())
+        .filter(|e| e.depth() > 0)
+        .filter_map(|e| {
+            let rel = e
+                .path()
+                .strip_prefix(root)
+                .ok()?
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            if e.file_type().is_dir() {
+                Some(format!("{rel}/"))
+            } else if e.file_type().is_file() && is_markdown(e.path()) {
+                Some(rel)
+            } else {
+                None
+            }
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,5 +102,21 @@ mod tests {
 
         let got = scan_markdown(root);
         assert_eq!(got, vec!["docs/c.md"]);
+    }
+
+    #[test]
+    fn tree_entries_include_empty_dirs_skip_hidden_and_non_md() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir(root.join("inbox")).unwrap(); // empty dir — must still appear
+        fs::create_dir(root.join("docs")).unwrap();
+        fs::create_dir(root.join(".git")).unwrap();
+        fs::write(root.join("README.md"), "r").unwrap();
+        fs::write(root.join("docs/c.md"), "c").unwrap();
+        fs::write(root.join("ignore.txt"), "x").unwrap();
+        fs::write(root.join(".git/x.md"), "x").unwrap();
+
+        let got = scan_tree_entries(root);
+        assert_eq!(got, vec!["README.md", "docs/", "docs/c.md", "inbox/"]);
     }
 }

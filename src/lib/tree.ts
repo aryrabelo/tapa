@@ -7,11 +7,16 @@ export interface FileNode {
 
 export function buildTree(relPaths: string[]): FileNode[] {
   const rootChildren: FileNode[] = [];
-  for (const rel of relPaths) {
+  for (const raw of relPaths) {
+    // A trailing "/" marks a directory entry (so empty folders still render);
+    // anything else is a markdown file whose last segment is the file node.
+    const isDirEntry = raw.endsWith("/");
+    const rel = isDirEntry ? raw.slice(0, -1) : raw;
+    if (!rel) continue;
     const parts = rel.split("/");
     let level = rootChildren;
     parts.forEach((part, i) => {
-      const isFile = i === parts.length - 1;
+      const isFile = i === parts.length - 1 && !isDirEntry;
       const path = parts.slice(0, i + 1).join("/");
       let next = level.find((c) => c.name === part);
       if (!next) {

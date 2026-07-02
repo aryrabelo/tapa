@@ -17,7 +17,9 @@ pub fn take_pending_open(state: tauri::State<PendingOpen>) -> Vec<String> {
 
 #[tauri::command]
 pub fn scan_tree(root: String) -> Result<Vec<String>, String> {
-    Ok(crate::fs_tree::scan_markdown(std::path::Path::new(&root)))
+    Ok(crate::fs_tree::scan_tree_entries(std::path::Path::new(
+        &root,
+    )))
 }
 
 #[tauri::command]
@@ -148,7 +150,11 @@ mod tests {
 /// streaming WebSocket the frontend opens with this token is CORS-exempt.
 /// Wired to the overlay via `window.__BUGTOPROMPT__.mintStreamingToken`.
 #[tauri::command]
-pub async fn mint_assemblyai_token(api_key: String) -> Result<String, String> {
+pub async fn mint_assemblyai_token() -> Result<String, String> {
+    // Key is read from the host environment (loaded from `.env` at startup), so
+    // it never ships in the webview bundle. Absent key => voice stays disabled.
+    let api_key = std::env::var("ASSEMBLYAI_API_KEY")
+        .map_err(|_| "ASSEMBLYAI_API_KEY not set".to_string())?;
     let resp = reqwest::Client::new()
         .get("https://streaming.assemblyai.com/v3/token?expires_in_seconds=300")
         .header("Authorization", api_key)
