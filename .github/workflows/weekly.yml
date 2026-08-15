@@ -18,10 +18,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          # migrated from macos-latest: GitHub-hosted billed (macOS 3-core 10x)
+          - platform: macos
             args: "--target aarch64-apple-darwin"
             id: macos-aarch64
-          - platform: macos-latest
+          # migrated from macos-latest: GitHub-hosted billed (macOS 3-core 10x)
+          - platform: macos
             args: "--target x86_64-apple-darwin"
             id: macos-x86_64
           - platform: ubuntu-latest
@@ -30,7 +32,7 @@ jobs:
           - platform: windows-latest
             args: ""
             id: windows
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'macos' && fromJSON('["self-hosted", "macOS", "ARM64", "deploy"]') || matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +55,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: Swatinem/rust-cache@v2
         with:

@@ -89,7 +89,8 @@ jobs:
 
   size:
     name: Artifact size gate (macOS)
-    runs-on: macos-latest
+    # migrated from macos-latest: GitHub-hosted billed (macOS 3-core 10x)
+    runs-on: [self-hosted, macOS, ARM64, deploy]
     # The dmg + app bundles carry the full binary (updater plugin included), so
     # the size gate needs no signing secret: the CI config override disables
     # updater-artifact signing. See scripts/check-size.mjs for the block-and-ask
