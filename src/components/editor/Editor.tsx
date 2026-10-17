@@ -1,11 +1,12 @@
 import type * as React from "react";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef, useState } from "react";
 import { livePreview } from "./live-preview";
 import { livePreviewTheme } from "./live-preview-theme";
+import { tableWidgets } from "./table-widget";
 
 interface Props {
   doc: string;
@@ -48,7 +49,7 @@ export function Editor({
           ...defaultKeymap,
           ...historyKeymap,
         ]),
-        markdown(),
+        markdown({ base: markdownLanguage }),
         EditorView.domEventHandlers({
           blur: () => {
             void onBlurSave().then((didSave) => {
@@ -66,6 +67,7 @@ export function Editor({
           if (u.docChanged) onChange(u.state.doc.toString());
         }),
         livePreview,
+        tableWidgets,
         livePreviewTheme,
       ],
     });

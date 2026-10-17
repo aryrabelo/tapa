@@ -18,13 +18,24 @@ const MARKER_NODES: Record<string, true> = {
   ListMark: true,
   LinkMark: true,
   URL: true,
+  StrikethroughMark: true,
 };
 
 const MARK_CLASSES: Record<string, string> = {
   StrongEmphasis: "cm-strong",
   Emphasis: "cm-em",
+  Strikethrough: "cm-strike",
   InlineCode: "cm-inline-code",
   Link: "cm-link",
+  // Raw table source (caret inside the table): dim the pipes and `|---|` row.
+  TableDelimiter: "cm-table-pipe",
+};
+
+/** Block nodes whose every line gets a line class. */
+const BLOCK_LINE_CLASSES: Record<string, string> = {
+  Blockquote: "cm-blockquote",
+  FencedCode: "cm-code-block",
+  Table: "cm-table-line",
 };
 
 class HrWidget extends WidgetType {
@@ -57,7 +68,12 @@ function decorateNode(
   const { name, from, to } = node;
 
   if (MARKER_NODES[name]) {
-    if (!isActive && to > from) decos.push(Decoration.replace({}).range(from, to));
+    if (isActive || to <= from) return;
+    // `## Title`: also hide the one space after the heading marker, or the
+    // title renders indented by it.
+    const spaceAfter =
+      name === "HeaderMark" && to < doc.lineAt(from).to && doc.sliceString(to, to + 1) === " ";
+    decos.push(Decoration.replace({}).range(from, spaceAfter ? to + 1 : to));
     return;
   }
 
@@ -74,13 +90,13 @@ function decorateNode(
     return;
   }
 
-  if (name === "Blockquote" || name === "FencedCode") {
-    const cls = name === "Blockquote" ? "cm-blockquote" : "cm-code-block";
+  const lineClass = BLOCK_LINE_CLASSES[name];
+  if (lineClass) {
     const startLine = doc.lineAt(from).number;
     const endLine = doc.lineAt(to).number;
     for (let n = startLine; n <= endLine; n++) {
       const lineStart = doc.line(n).from;
-      decos.push(Decoration.line({ class: cls }).range(lineStart, lineStart));
+      decos.push(Decoration.line({ class: lineClass }).range(lineStart, lineStart));
     }
     return;
   }

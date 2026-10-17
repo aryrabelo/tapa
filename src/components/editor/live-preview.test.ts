@@ -1,4 +1,4 @@
-import { markdown } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import type { Decoration } from "@codemirror/view";
 import { EditorView } from "@codemirror/view";
@@ -16,7 +16,7 @@ function mkView(doc: string, anchor: number): EditorView {
   const state = EditorState.create({
     doc,
     selection: { anchor },
-    extensions: [markdown(), livePreview],
+    extensions: [markdown({ base: markdownLanguage }), livePreview],
   });
   return new EditorView({ state, parent: document.body });
 }
@@ -112,5 +112,25 @@ describe("livePreview buildDecorations", () => {
       (h) => h.from === hrFrom && (h.spec as { widget?: unknown }).widget !== undefined,
     );
     expect(revealed).toBeUndefined();
+  });
+
+  it("hides the heading marker together with its following space on an inactive line", () => {
+    const doc = "## Title\nbody\n";
+    const v = view(doc, doc.indexOf("body"));
+    const hidden = collect(v).filter((h) => h.isReplace && h.from === 0);
+    expect(hidden).toHaveLength(1);
+    expect(hidden[0]?.to).toBe("## ".length);
+  });
+
+  it("marks every raw table line and dims the delimiters while the caret is inside", () => {
+    const doc = "| a | b |\n|---|---|\n| 1 | 2 |\n";
+    const v = view(doc, doc.indexOf("1"));
+    const hits = collect(v);
+    const tableLines = hits.filter((h) => h.spec.class === "cm-table-line").map((h) => h.from);
+    expect(tableLines).toEqual([0, doc.indexOf("|---"), doc.indexOf("| 1")]);
+    const delimiterRow = hits.find(
+      (h) => h.spec.class === "cm-table-pipe" && h.from === doc.indexOf("|---"),
+    );
+    expect(delimiterRow?.to).toBe(doc.indexOf("|---") + "|---|---|".length);
   });
 });

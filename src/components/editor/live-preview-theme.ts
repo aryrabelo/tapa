@@ -5,10 +5,11 @@ import { EditorView } from "@codemirror/view";
  * Owns ALL editor appearance for the CodeMirror live-preview mode.
  *
  * Two jobs:
- *  1. Style the live-preview decoration classes (cm-strong / cm-em /
+ *  1. Style the live-preview decoration classes (cm-strong / cm-em / cm-strike /
  *     cm-inline-code / cm-link, the cm-h1..cm-h6 / cm-blockquote /
- *     cm-code-block line classes, and the cm-hr widget) so hidden-marker
- *     markdown reads as formatted text.
+ *     cm-code-block / cm-table-line line classes, the cm-table-pipe mark,
+ *     and the cm-hr widget) so hidden-marker markdown reads as formatted
+ *     text. The rendered table widget (.tapa-table) is styled in index.css.
  *  2. Reproduce the reader's typography (serif body, heading scale, code,
  *     quotes, links) so entering edit mode looks like the rendered reader.
  *
@@ -54,6 +55,7 @@ export const livePreviewTheme: Extension = EditorView.theme({
   // Inline marks
   ".cm-strong": { fontWeight: "600" },
   ".cm-em": { fontStyle: "italic" },
+  ".cm-strike": { textDecoration: "line-through" },
   ".cm-inline-code": {
     fontFamily: MONO,
     fontSize: "0.85em",
@@ -116,6 +118,17 @@ export const livePreviewTheme: Extension = EditorView.theme({
     fontFamily: MONO,
     fontSize: "0.85em",
     backgroundColor: "color-mix(in oklch, var(--muted) 60%, transparent)",
+  },
+
+  // Raw GFM table source, shown while the caret is inside the table
+  ".cm-line.cm-table-line": {
+    fontFamily: MONO,
+    fontSize: "0.85em",
+    lineHeight: "1.9",
+  },
+  ".cm-table-pipe": {
+    color: "var(--muted-foreground)",
+    opacity: "0.6",
   },
 
   // Horizontal rule widget

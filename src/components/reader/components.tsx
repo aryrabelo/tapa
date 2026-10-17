@@ -53,11 +53,16 @@ export const markdownComponents: Components = {
       {...p}
     />
   ),
-  table: ({ node, ...p }) => <table data-so={so(node)} className="my-6 w-full text-sm" {...p} />,
-  th: ({ node: _node, ...p }) => (
-    <th className="border-b pr-4 pb-2 text-left font-semibold" {...p} />
+  // Shared `.tapa-table` look (index.css) — the editor's table widget renders the
+  // same classes, so reading and editing show the identical table. The wrapper
+  // scrolls wide tables horizontally instead of squeezing the prose column.
+  table: ({ node, ...p }) => (
+    <div data-so={so(node)} className="tapa-table-wrap">
+      <table className="tapa-table" {...p} />
+    </div>
   ),
-  td: ({ node: _node, ...p }) => <td className="border-border/60 border-b py-2 pr-4" {...p} />,
+  th: ({ node, ...p }) => <th data-so={so(node)} {...p} />,
+  td: ({ node, ...p }) => <td data-so={so(node)} {...p} />,
   code: ({ node: _node, className, ...p }) => {
     const isBlock = typeof className === "string" && className.includes("language-");
     return (

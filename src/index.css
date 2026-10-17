@@ -158,3 +158,68 @@ body {
 .tapa-saved-flash {
   animation: tapa-saved-flash 1.2s ease-out forwards;
 }
+
+/* GFM tables — one look for the reader (react-markdown) and the editor's table
+   widget (live preview). Sans + smaller than the serif prose so dense rows stay
+   scannable; header band, column rules and zebra rows keep long cells aligned
+   by eye; the wrapper scrolls wide tables instead of crushing the columns. */
+.tapa-table-wrap {
+  margin: 1.75rem 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: normal;
+}
+.tapa-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family:
+    "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--foreground);
+}
+.tapa-table th,
+.tapa-table td {
+  min-width: 6rem;
+  padding: 0.6rem 0.85rem;
+  text-align: left;
+  vertical-align: top;
+}
+.tapa-table th {
+  background: var(--muted);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.tapa-table th + th,
+.tapa-table td + td {
+  border-left: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+}
+.tapa-table tbody tr + tr td {
+  border-top: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+}
+.tapa-table tbody tr:nth-child(even) td {
+  background: color-mix(in oklch, var(--muted) 45%, transparent);
+}
+.tapa-table tbody tr:hover td {
+  background: var(--accent);
+}
+.tapa-table strong {
+  font-weight: 600;
+}
+.tapa-table code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  background: color-mix(in oklch, var(--foreground) 7%, transparent);
+  font-family: ui-monospace, "SF Mono", "Menlo", monospace;
+  font-size: 0.85em;
+}
+.tapa-table a,
+.tapa-table .cm-link {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--link) 40%, transparent);
+  text-underline-offset: 3px;
+}

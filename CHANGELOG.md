@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Tables render as real tables in the editor (the default surface), not as raw
+  `| pipes |`. Click a cell to edit that table's source with the caret in the
+  clicked cell; move the caret out and it renders again. The editor now parses
+  GFM (tables, strikethrough, task lists), and the reader and editor share one
+  table look: header band, zebra rows, column rules, sans 14px, horizontal
+  scroll for wide tables.
 - Sidebar "+" beside the **Files** header creates a new file or folder *inside
   the open folder* (e.g. the Brain vault) — no more native Save dialog that
   defaults to an unrelated directory. Type a name and press Enter; end it with
