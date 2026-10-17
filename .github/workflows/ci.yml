@@ -105,8 +105,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+      # beforeBuildCommand is `pnpm build`, and pnpm 11 needs node:sqlite.
+      - name: Install pnpm
+        run: npm install -g pnpm@11.0.3
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
