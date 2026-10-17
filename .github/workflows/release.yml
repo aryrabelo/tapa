@@ -84,7 +84,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+
+      - name: Install pnpm
+        run: npm install -g pnpm@11.0.3
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -94,7 +96,8 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - run: npm ci
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build and upload to draft release
         uses: tauri-apps/tauri-action@v0
