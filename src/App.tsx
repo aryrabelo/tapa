@@ -2,11 +2,9 @@ import { PanelLeft, Settings } from "@/components/ui/icons";
 import type * as React from "react";
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import {
   createPath,
-  pickFile,
   pickFolder,
   pickSavePath,
   readFile,
@@ -17,66 +15,29 @@ import {
 import { onToasterNeeded, toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
 import { registry, useActivePanel } from "@/lib/registry";
-import { searchModule } from "@/modules/search";
-import { defaultHandlerModule } from "@/modules/default-handler";
-import { updaterModule } from "@/modules/updater";
 import { useSearch } from "@/modules/search/useSearch";
-import { findModule } from "@/modules/find";
 import { useFind } from "@/modules/find/useFind";
 import { useFileWatcher } from "@/lib/useFileWatcher";
 import { useOsOpen } from "@/lib/useOsOpen";
 import { useNewFile } from "@/lib/useNewFile";
-import { presentationModule } from "@/modules/presentation";
-import { livewriteModule } from "@/modules/livewrite";
-import { teleprompterModule } from "@/modules/teleprompter";
-import { brainModule } from "@/modules/brain";
-import { settingsModule } from "@/modules/settings";
-import { TOGGLEABLE_PLUGINS, getDisabledPlugins } from "@/lib/plugins";
+import { bootCorePlugins } from "@/lib/plugins";
 import { ContextMenu } from "@/components/ContextMenu";
 
-// codemirror (~169KB gzip) is only used in edit mode. Load it on demand so the
-// reader-first startup bundle stays lean (smaller webview memory + faster boot).
+// Commands and settings load with the shell. Editor plugins wait until a note opens.
+void bootCorePlugins();
+
+// CodeMirror loads with the first note, not with the empty screen.
 const Editor = lazy(() =>
   import("@/components/editor/Editor").then((m) => ({ default: m.Editor })),
 );
 
-// react-markdown + the remark/micromark stack (~47KB gzip) only renders once a
-// file is open; the app boots to an empty state. Load it on demand too.
-const Reader = lazy(() =>
-  import("@/components/reader/Reader").then((m) => ({ default: m.Reader })),
-);
-
-// The folder tree (radix ScrollArea + tree icons) only shows once a folder is
-// open; defer it so the empty-state cold start stays light.
+// The folder tree only shows once a folder is open.
 const AppSidebar = lazy(() =>
   import("@/components/layout/AppSidebar").then((m) => ({ default: m.AppSidebar })),
 );
 
 // sonner's <Toaster> (~9KB gzip) is mounted on first toast, not at startup.
 const Toaster = lazy(() => import("sonner").then((m) => ({ default: m.Toaster })));
-
-// Search is the first registry module; register it once at module load so the
-// ⌘⇧F command exists eagerly. The panel body is lazy-loaded on first open.
-registry.register(searchModule);
-registry.register(findModule);
-
-// Reader/tool plugins: register their commands eagerly, then enable each one
-// (enabling activates it, registering its context-menu items) unless the user
-// turned it off in Settings. Disabled plugins stay registered but inert.
-registry.register(presentationModule);
-registry.register(livewriteModule);
-registry.register(teleprompterModule);
-registry.register(brainModule);
-const disabledPlugins = getDisabledPlugins();
-for (const { id } of TOGGLEABLE_PLUGINS) {
-  registry.setEnabled(id, !disabledPlugins.has(id));
-}
-registry.register(defaultHandlerModule);
-void registry.activate("default-handler");
-registry.register(updaterModule);
-void registry.activate("updater");
-registry.register(settingsModule);
-void registry.activate("settings");
 
 const SearchPanel = lazy(() =>
   import("@/modules/search/SearchPanel").then((m) => ({ default: m.SearchPanel })),
@@ -90,8 +51,8 @@ const SettingsPanel = lazy(() =>
 
 export default function App(): React.ReactElement {
   const s = useStore();
-  // Mount the lazy <Toaster> only the first time a toast is requested.
   const [toasterReady, setToasterReady] = useState(false);
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     onToasterNeeded(() => setToasterReady(true));
   }, []);
@@ -144,8 +105,6 @@ export default function App(): React.ReactElement {
       toast.error(String(e));
       return;
     }
-    // Watch failures are isolated: the folder is already open and populated, so
-    // surface a distinct message instead of letting it look like an open failure.
     try {
       await watchFolder(root);
     } catch {
@@ -155,11 +114,9 @@ export default function App(): React.ReactElement {
 
   // Open a single Markdown file by absolute path: scope the "folder" to its
   // parent so the sidebar shows just this file and save/watch keep working with
-  // the same root+rel model. Shared by the file dialog and OS file-open.
+  // the same root+rel model. Shared by the OS file-open path.
   const openFileByPath = useCallback(async (file: string) => {
     const sep = Math.max(file.lastIndexOf("/"), file.lastIndexOf("\\"));
-    // sep > 0: normal parent dir; sep === 0: file at filesystem root ("/x.md" -> "/");
-    // sep < 0: bare name with no separator (parent is the current dir ".").
     const parent = sep > 0 ? file.slice(0, sep) : sep === 0 ? "/" : ".";
     const base = file.slice(sep + 1);
     try {
@@ -177,15 +134,8 @@ export default function App(): React.ReactElement {
     }
   }, []);
 
-  async function openSingleFile() {
-    const file = await pickFile();
-    if (!file) return;
-    await openFileByPath(file);
-  }
-
   // Native "New File" menu (⌘N): pick a save location, write a blank file, then
-  // open it straight into edit mode. No in-memory untitled buffer, so the
-  // path-based save model stays simple.
+  // open it. No in-memory untitled buffer, so the path-based save model stays simple.
   const newFile = useCallback(async () => {
     const path = await pickSavePath();
     if (!path) return;
@@ -196,12 +146,10 @@ export default function App(): React.ReactElement {
       return;
     }
     await openFileByPath(path);
-    useStore.getState().enterEdit(0);
   }, [openFileByPath]);
 
   // Sidebar "+": create a new file or directory relative to the open folder
-  // (no native Save dialog). Files open straight into edit mode; an empty
-  // directory has no markdown yet, so it only appears once it holds a note.
+  // (no native Save dialog). An empty directory appears once it holds a note.
   const createEntry = useCallback(async (rel: string, dir: boolean) => {
     const { root } = useStore.getState();
     if (!root || !rel) return;
@@ -217,7 +165,6 @@ export default function App(): React.ReactElement {
       toast.success("Folder created — it appears once it has a note.");
     } else {
       useStore.getState().setActive(rel, "");
-      useStore.getState().enterEdit(0);
     }
   }, []);
 
@@ -235,35 +182,31 @@ export default function App(): React.ReactElement {
   async function save(silent = false): Promise<boolean> {
     const { root, activePath, content } = useStore.getState();
     if (!root || !activePath) return false;
+    setSaving(true);
     try {
       await writeFile(`${root}/${activePath}`, content);
       useStore.getState().markSaved();
       if (!silent) toast.success("Saved");
       return true;
     } catch (e) {
-      // Editor stays open and dirty is preserved so the user can retry.
       toast.error(`Save failed: ${e}`);
       return false;
+    } finally {
+      setSaving(false);
     }
   }
 
-  // ⌘S and double-click share one handler: save, then return to the reader on
-  // success. A failed save returns false, leaving the editor open and dirty.
-  const exitOnSave = async (): Promise<void> => {
-    if (await save()) useStore.getState().exitEdit();
-  };
-
-  // Blur autosaves only when dirty; the white-border flash is the confirmation,
-  // so the save is silent and edit mode is preserved.
+  // Blur autosaves only when dirty. The header status is the confirmation.
   const saveOnBlur = async (): Promise<boolean> => {
     if (!useStore.getState().dirty) return false;
-    return await save(true); // silent; the border flash is the confirmation
+    return await save(true);
   };
 
   useOsOpen(openFileByPath);
   useNewFile(newFile);
 
-  const folderName = s.root ? (s.root.split(/[/\\]/).filter(Boolean).pop() ?? null) : null;
+  const docTitle = s.activePath?.split(/[/\\]/).filter(Boolean).pop() ?? null;
+  const saveStatus = !s.activePath ? null : saving ? "Saving…" : s.dirty ? "Unsaved" : "Saved";
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
@@ -329,13 +272,15 @@ export default function App(): React.ReactElement {
               <PanelLeft className="size-4" />
             </Button>
             <span className="truncate text-sm font-medium text-foreground">
-              {folderName ?? "Tapa"}
+              {docTitle ?? "Tapa"}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <kbd className="mr-1 hidden select-none rounded border bg-muted px-1.5 py-0.5 font-mono text-[0.7rem] text-muted-foreground sm:inline-block">
-              ⌘K
-            </kbd>
+          <div className="flex items-center gap-3">
+            {saveStatus && (
+              <span className="text-xs text-muted-foreground" aria-live="polite">
+                {saveStatus}
+              </span>
+            )}
             <Button
               size="icon"
               variant="ghost"
@@ -346,17 +291,6 @@ export default function App(): React.ReactElement {
             >
               <Settings className="size-4" />
             </Button>
-            <ThemeToggle />
-            {s.root && (
-              <>
-                <Button size="sm" variant="outline" onClick={openSingleFile}>
-                  Open File
-                </Button>
-                <Button size="sm" variant="outline" onClick={openFolder}>
-                  Open Folder
-                </Button>
-              </>
-            )}
           </div>
         </header>
         <main className="min-h-0 flex-1 overflow-auto">
@@ -364,25 +298,11 @@ export default function App(): React.ReactElement {
             <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
               <span className="font-serif text-4xl tracking-tight text-muted-foreground">Tapa</span>
               <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                Open a folder, then press ⌘K to jump between files — or open a single file.
+                Open a folder of notes. Each one opens ready to edit.
               </p>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={openFolder}>
-                  Open Folder
-                </Button>
-                <Button size="sm" variant="ghost" onClick={openSingleFile}>
-                  Open File
-                </Button>
-                {!getDisabledPlugins().has("brain") && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void registry.runCommand("brain.open")}
-                  >
-                    Open Brain
-                  </Button>
-                )}
-              </div>
+              <Button size="sm" onClick={openFolder}>
+                Open my folder
+              </Button>
             </div>
           )}
           {!s.activePath && s.root && (
@@ -392,23 +312,14 @@ export default function App(): React.ReactElement {
               </p>
             </div>
           )}
-          {s.activePath && s.mode === "reader" && (
-            <Suspense fallback={null}>
-              <Reader
-                content={s.content}
-                path={s.activePath}
-                onEditAt={(off) => useStore.getState().enterEdit(off)}
-              />
-            </Suspense>
-          )}
-          {s.activePath && s.mode === "edit" && (
+          {s.activePath && (
             <Suspense fallback={null}>
               <Editor
+                key={s.activePath}
                 doc={s.content}
                 cursor={s.editOffset ?? 0}
                 onChange={(d) => useStore.getState().setContent(d)}
-                onExit={exitOnSave}
-                onSave={exitOnSave}
+                onSave={() => void save()}
                 onBlurSave={saveOnBlur}
               />
             </Suspense>

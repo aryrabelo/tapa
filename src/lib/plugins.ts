@@ -1,7 +1,9 @@
-// Optional feature plugins the user can turn on/off in Settings. `id` must match
-// the Module.id registered in App.tsx; the registry gates a disabled plugin's
-// commands, keybindings, and context-menu items. Core plugins (search, find,
-// settings, updater, default-handler) are not listed here — they are always on.
+// Plugin manifest. Core plugins (no `defaultEnabled`) are always on. The rest
+// are official plugins the user turns on or off in Settings. Each `load` is a
+// dynamic import, so a plugin's code arrives only when it is actually used.
+import type { Module } from "@/lib/registry";
+import { registry } from "@/lib/registry";
+
 export interface ConfigField {
   key: string;
   label: string;
@@ -10,52 +12,208 @@ export interface ConfigField {
   help?: string;
 }
 
-export interface PluginInfo {
+export interface PluginManifest {
   id: string;
-  label: string;
-  keys?: string; // shortcut glyphs, for display only
+  label?: string;
+  /** One sentence, for someone who does not write code. */
+  blurb?: string;
+  keys?: string;
+  /** Omitted for core plugins, which are always on and not listed in Settings. */
+  defaultEnabled?: boolean;
+  /** Loaded with the editor, not at app boot. Keeps the empty screen free of CodeMirror. */
+  editor?: boolean;
+  /** Activate as soon as the module loads. Otherwise the first command activates it. */
+  eager?: boolean;
   config?: ConfigField[];
+  load: () => Promise<Module>;
 }
 
-export const TOGGLEABLE_PLUGINS: readonly PluginInfo[] = [
-  { id: "teleprompter", label: "Teleprompter", keys: "⌘⇧T" },
-  { id: "presentation", label: "Presentation", keys: "⌘⇧P" },
-  { id: "livewrite", label: "Live-write", keys: "⌘⇧L" },
+export const PLUGINS: readonly PluginManifest[] = [
+  {
+    id: "search",
+    load: () => import("@/modules/search").then((m) => m.searchModule),
+  },
+  {
+    id: "find",
+    load: () => import("@/modules/find").then((m) => m.findModule),
+  },
+  {
+    id: "settings",
+    eager: true,
+    load: () => import("@/modules/settings").then((m) => m.settingsModule),
+  },
+  {
+    id: "updater",
+    eager: true,
+    load: () => import("@/modules/updater").then((m) => m.updaterModule),
+  },
+  {
+    id: "default-handler",
+    eager: true,
+    load: () => import("@/modules/default-handler").then((m) => m.defaultHandlerModule),
+  },
+  {
+    id: "live-preview",
+    label: "Formatted reading",
+    blurb: "Hides Markdown symbols so the note reads like a page.",
+    defaultEnabled: true,
+    editor: true,
+    eager: true,
+    load: () => import("@/modules/live-preview").then((m) => m.livePreviewModule),
+  },
+  {
+    id: "tables",
+    label: "Tables",
+    blurb: "Draws tables. Click a cell to edit it.",
+    defaultEnabled: true,
+    editor: true,
+    eager: true,
+    load: () => import("@/modules/tables").then((m) => m.tablesModule),
+  },
+  {
+    id: "teleprompter",
+    label: "Teleprompter",
+    blurb: "Scrolls the note on its own, for recording a video.",
+    keys: "⌘⇧T",
+    defaultEnabled: false,
+    eager: true,
+    load: () => import("@/modules/teleprompter").then((m) => m.teleprompterModule),
+  },
   {
     id: "brain",
     label: "Brain",
+    blurb: "Opens a folder of idea notes.",
     keys: "⌘⇧B",
+    defaultEnabled: false,
+    eager: true,
     config: [
       {
         key: "dir",
         label: "Vault directory",
         type: "dir",
         placeholder: "~/brain",
-        help: "Folder for your ideas vault. Leave blank to use ~/brain.",
+        help: "Folder for your ideas. Leave blank to use ~/brain.",
       },
     ],
+    load: () => import("@/modules/brain").then((m) => m.brainModule),
   },
 ];
 
-const STORAGE_KEY = "tapa-disabled-plugins";
+const OVERRIDE_KEY = "tapa-plugin-overrides";
+const LEGACY_KEY = "tapa-disabled-plugins";
 
-/** Ids of plugins the user has turned off (persisted). Enabled is the default. */
-export function getDisabledPlugins(): Set<string> {
-  if (typeof localStorage === "undefined") return new Set();
+function parseOverrides(raw: string | null): Record<string, boolean> {
+  if (!raw) return {};
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const arr = raw ? (JSON.parse(raw) as unknown) : [];
-    return new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : []);
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, boolean> = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (typeof value === "boolean") out[id] = value;
+    }
+    return out;
   } catch {
-    return new Set();
+    return {};
   }
 }
 
-/** Persist a single plugin's disabled state. */
-export function setPluginDisabled(id: string, disabled: boolean): void {
+function legacyIds(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function migrateLegacyDisabled(): void {
+  if (localStorage.getItem(OVERRIDE_KEY)) return;
+  const legacy = localStorage.getItem(LEGACY_KEY);
+  if (!legacy) return;
+  const migrated: Record<string, boolean> = {};
+  for (const id of legacyIds(legacy)) migrated[id] = false;
+  localStorage.setItem(OVERRIDE_KEY, JSON.stringify(migrated));
+  localStorage.removeItem(LEGACY_KEY);
+}
+
+function readOverrides(): Record<string, boolean> {
+  if (typeof localStorage === "undefined") return {};
+  migrateLegacyDisabled();
+  return parseOverrides(localStorage.getItem(OVERRIDE_KEY));
+}
+
+function writeOverride(id: string, enabled: boolean): void {
   if (typeof localStorage === "undefined") return;
-  const set = getDisabledPlugins();
-  if (disabled) set.add(id);
-  else set.delete(id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
+  const overrides = readOverrides();
+  overrides[id] = enabled;
+  localStorage.setItem(OVERRIDE_KEY, JSON.stringify(overrides));
+}
+
+/** Core plugins are always on. Others follow the saved choice, then the manifest default. */
+export function isPluginEnabled(id: string): boolean {
+  const manifest = PLUGINS.find((p) => p.id === id);
+  if (!manifest || manifest.defaultEnabled === undefined) return true;
+  const overrides = readOverrides();
+  if (id in overrides) return overrides[id] === true;
+  return manifest.defaultEnabled;
+}
+
+export function toggleablePlugins(): PluginManifest[] {
+  return PLUGINS.filter((p) => p.defaultEnabled !== undefined);
+}
+
+const inflight = new Map<string, Promise<void>>();
+
+function ensureLoaded(manifest: PluginManifest): Promise<void> {
+  const existing = inflight.get(manifest.id);
+  if (existing) return existing;
+  const pending = (async () => {
+    const mod = await manifest.load();
+    registry.register(mod);
+    if (manifest.eager && isPluginEnabled(manifest.id)) registry.setEnabled(manifest.id, true);
+  })();
+  inflight.set(manifest.id, pending);
+  return pending;
+}
+
+/** Load core plugins (commands, settings). Editor plugins wait until a note is open. */
+export function bootCorePlugins(): Promise<void> {
+  return boot("core");
+}
+
+/** Load editor plugins (live preview, tables) before the editor is created. */
+export function bootEditorPlugins(): Promise<void> {
+  return boot("editor");
+}
+
+let coreBoot: Promise<void> | null = null;
+let editorBoot: Promise<void> | null = null;
+
+function boot(which: "core" | "editor"): Promise<void> {
+  const slot = which === "core" ? coreBoot : editorBoot;
+  if (slot) return slot;
+  const pending = (async () => {
+    for (const manifest of PLUGINS) {
+      const isEditor = manifest.editor === true;
+      if (which === "editor" ? !isEditor : isEditor) continue;
+      if (manifest.defaultEnabled !== undefined && !isPluginEnabled(manifest.id)) continue;
+      await ensureLoaded(manifest);
+    }
+  })();
+  if (which === "core") coreBoot = pending;
+  else editorBoot = pending;
+  return pending;
+}
+
+/** Persist the choice and load or tear down the plugin. */
+export async function setPluginRunning(id: string, enabled: boolean): Promise<void> {
+  const manifest = PLUGINS.find((p) => p.id === id);
+  if (!manifest || manifest.defaultEnabled === undefined) return;
+  writeOverride(id, enabled);
+  if (enabled) {
+    await ensureLoaded(manifest);
+    registry.setEnabled(id, true);
+    return;
+  }
+  if (inflight.has(id)) registry.setEnabled(id, false);
 }

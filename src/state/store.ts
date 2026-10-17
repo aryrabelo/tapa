@@ -1,24 +1,19 @@
 import { create } from "zustand";
 import { buildTree, type FileNode } from "@/lib/tree";
 
-type Mode = "reader" | "edit";
-
 interface AppState {
   root: string | null;
   files: string[]; // relative paths
   tree: FileNode[];
   activePath: string | null; // relative path
   content: string;
-  mode: Mode;
   dirty: boolean;
-  editOffset: number | null; // source offset to place the cursor on edit entry
-  scrollLine: number | null; // 1-based line the reader should scroll to (search jump)
+  editOffset: number | null; // caret offset when a note opens
+  scrollLine: number | null; // 1-based line to scroll to (search jump)
 
   setFolder: (root: string, files: string[]) => void;
-  setActive: (path: string, content: string) => void;
+  setActive: (path: string, content: string, offset?: number) => void;
   setContent: (content: string) => void;
-  enterEdit: (offset: number) => void;
-  exitEdit: () => void;
   markSaved: () => void;
   setScrollLine: (line: number | null) => void;
 }
@@ -29,7 +24,6 @@ export const useStore = create<AppState>((set) => ({
   tree: [],
   activePath: null,
   content: "",
-  mode: "reader",
   dirty: false,
   editOffset: null,
   scrollLine: null,
@@ -38,18 +32,15 @@ export const useStore = create<AppState>((set) => ({
   // (trailing "/") are tree-only, so strip them from the flat list.
   setFolder: (root, entries) =>
     set({ root, files: entries.filter((e) => !e.endsWith("/")), tree: buildTree(entries) }),
-  setActive: (path, content) =>
+  setActive: (path, content, offset = 0) =>
     set({
       activePath: path,
       content,
-      mode: "edit",
       dirty: false,
-      editOffset: 0,
+      editOffset: offset,
       scrollLine: null,
     }),
   setContent: (content) => set({ content, dirty: true }),
-  enterEdit: (offset) => set({ mode: "edit", editOffset: offset }),
-  exitEdit: () => set({ mode: "reader", editOffset: null }),
   markSaved: () => set({ dirty: false }),
   setScrollLine: (scrollLine) => set({ scrollLine }),
 }));

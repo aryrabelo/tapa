@@ -296,3 +296,50 @@ describe("sidebar actions", () => {
     expect(cb).toHaveBeenCalled();
   });
 });
+
+describe("plugin teardown", () => {
+  it("drops commands registered during activate when the module is disabled", async () => {
+    const reg = createRegistry();
+    reg.register(
+      makeModule({
+        id: "m",
+        register: (r) => r.command({ id: "eager", title: "Eager", run: () => {} }),
+        activate: (ctx) => {
+          ctx.registerCommand({ id: "late", title: "Late", run: () => {} });
+        },
+      }),
+    );
+    await reg.activate("m");
+    expect(reg.commands().map((c) => c.id)).toContain("late");
+    reg.setEnabled("m", false);
+    expect(reg.commands().map((c) => c.id)).not.toContain("late");
+    expect(reg.commands().map((c) => c.id)).not.toContain("eager");
+    reg.setEnabled("m", true);
+    expect(
+      reg
+        .commands()
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual(["eager", "late"]);
+  });
+
+  it("removes an editor extension when the module is disabled", () => {
+    const reg = createRegistry();
+    const ext = { id: "ext" };
+    reg.register(
+      makeModule({
+        id: "m",
+        register: (r) => r.command({ id: "c", title: "C", run: () => {} }),
+        activate: (ctx) => {
+          ctx.registerEditorExtension(ext);
+        },
+      }),
+    );
+    reg.setEnabled("m", true);
+    expect(reg.editorExtensions()).toEqual([ext]);
+    reg.setEnabled("m", false);
+    expect(reg.editorExtensions()).toEqual([]);
+    reg.setEnabled("m", true);
+    expect(reg.editorExtensions()).toEqual([ext]);
+  });
+});

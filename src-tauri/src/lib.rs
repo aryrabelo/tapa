@@ -8,13 +8,13 @@ mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // The rustls stack inherited via feature unification ships no default crypto
-    // provider, so install ring once before any TLS client is built (the
-    // bug-capture overlay's AssemblyAI token mint uses reqwest). Without this,
-    // building a reqwest Client panics. Err means already installed — ignore.
+    // dev-capture only. ring is not a default rustls provider, so install it
+    // once or building the token client panics. Err means it is already installed.
+    #[cfg(feature = "dev-capture")]
     let _ = rustls::crypto::ring::default_provider().install_default();
     // Load `.env` into the process environment so the native token mint can read
     // ASSEMBLYAI_API_KEY. The key stays server-side and never reaches the webview.
+    #[cfg(feature = "dev-capture")]
     let _ = dotenvy::dotenv();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

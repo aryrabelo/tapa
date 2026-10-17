@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   // React -> preact/compat (smaller webview runtime). jsx-runtime entries must
   // precede the bare `react` alias, and react/jsx-dev-runtime maps to the prod
-  // preact jsx-runtime so react-markdown never reaches React's element-freezing
+  // preact jsx-runtime so a dependency never reaches React's element-freezing
   // dev factory.
   resolve: {
     alias: [

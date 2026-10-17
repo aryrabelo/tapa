@@ -1,5 +1,5 @@
 import { syntaxTree } from "@codemirror/language";
-import type { Extension, Range, Text } from "@codemirror/state";
+import { type Extension, type Range, StateEffect, StateField, type Text } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -45,6 +45,37 @@ class HrWidget extends WidgetType {
     return hr;
   }
 }
+
+/** Set once the person clicks or types. Until then every marker stays hidden. */
+export const revealMarkers = StateEffect.define<boolean>();
+
+export const markersRevealed = StateField.define<boolean>({
+  create: () => false,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(revealMarkers)) return effect.value;
+    }
+    return value;
+  },
+});
+
+function markRevealed(view: EditorView): void {
+  // `false` as the second argument means "don't throw when the field is absent".
+  if (view.state.field(markersRevealed, false) !== false) return;
+  view.dispatch({ effects: revealMarkers.of(true) });
+}
+
+/** Clicking or typing reveals markers on the active line. Focus alone does not. */
+export const revealOnInteract: Extension = EditorView.domEventHandlers({
+  keydown: (_event, view) => {
+    markRevealed(view);
+    return false;
+  },
+  mousedown: (_event, view) => {
+    markRevealed(view);
+    return false;
+  },
+});
 
 /** Line numbers (1-based) touched by any selection range. */
 function activeLines(view: EditorView): Set<number> {
@@ -109,7 +140,10 @@ function decorateNode(
 /** Build the live-preview decoration set. Exported for testability. */
 export function buildDecorations(view: EditorView): DecorationSet {
   const { doc } = view.state;
-  const active = activeLines(view);
+  // Absent field means "already revealed", so tests that only mount `livePreview`
+  // still assert on the cursor line. The plugin installs the field at `false`.
+  const revealed = view.state.field(markersRevealed, false) !== false;
+  const active = revealed ? activeLines(view) : new Set<number>();
   const decos: Range<Decoration>[] = [];
 
   for (const { from, to } of view.visibleRanges) {

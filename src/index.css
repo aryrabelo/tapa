@@ -147,20 +147,7 @@ body {
   }
 }
 
-@keyframes tapa-saved-flash {
-  0% {
-    border-color: rgba(255, 255, 255, 0.9);
-  }
-  100% {
-    border-color: transparent;
-  }
-}
-.tapa-saved-flash {
-  animation: tapa-saved-flash 1.2s ease-out forwards;
-}
-
-/* GFM tables — one look for the reader (react-markdown) and the editor's table
-   widget (live preview). Sans + smaller than the serif prose so dense rows stay
+/* GFM tables drawn inside the editor. Sans + smaller than the serif prose so dense rows stay
    scannable; header band, column rules and zebra rows keep long cells aligned
    by eye; the wrapper scrolls wide tables instead of crushing the columns. */
 .tapa-table-wrap {

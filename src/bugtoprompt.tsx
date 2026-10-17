@@ -31,8 +31,7 @@ export function mountBugToPrompt(): void {
     // key lives only in the host env (never the bundle): Rust reads
     // ASSEMBLYAI_API_KEY and returns an error when unset, so voice simply stays
     // disabled without a key — no frontend gate needed.
-    mintStreamingToken: (): Promise<string> =>
-      invoke<string>("mint_assemblyai_token"),
+    mintStreamingToken: (): Promise<string> => invoke<string>("mint_assemblyai_token"),
   };
   const host = document.createElement("div");
   host.id = "bugtoprompt-root";

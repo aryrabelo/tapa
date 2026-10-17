@@ -6,13 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-17
+
+### Changed
+- One always-editable surface. The separate reader, the double-click that left
+  the note, react-markdown, and the source map are gone. The header shows the
+  note's title and Saved / Saving… / Unsaved. Markdown symbols stay hidden until
+  you click or type.
+- Plugins load from a manifest, and only when they are on. Formatted reading and
+  tables are the first plugins (on by default). Teleprompter and Brain stay off
+  until you turn them on. Turning a plugin off removes the commands it added
+  while it was active.
+- The AssemblyAI token mint, and the dotenv/rustls startup it needed, sit
+  behind the `dev-capture` cargo feature. A normal build leaves them out.
+
+### Removed
+- Live-write and Presentation. They only animated the old reader.
+- The welcome-screen Open Brain button, the header's duplicate Open buttons,
+  the decorative ⌘K badge, and the second theme control.
+
 ### Added
-- Tables render as real tables in the editor (the default surface), not as raw
-  `| pipes |`. Click a cell to edit that table's source with the caret in the
-  clicked cell; move the caret out and it renders again. The editor now parses
-  GFM (tables, strikethrough, task lists), and the reader and editor share one
-  table look: header band, zebra rows, column rules, sans 14px, horizontal
-  scroll for wide tables.
+- Tables render as real tables in the editor, not as raw `| pipes |`. Click a
+  cell to edit that table's source with the caret in the clicked cell; move the
+  caret out and it renders again. The editor parses GFM (tables, strikethrough,
+  task lists). The table look is a header band, zebra rows, column rules, sans
+  14px, and horizontal scroll for wide tables.
 - Sidebar "+" beside the **Files** header creates a new file or folder *inside
   the open folder* (e.g. the Brain vault) — no more native Save dialog that
   defaults to an unrelated directory. Type a name and press Enter; end it with
@@ -25,14 +43,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keyboard focus (a non-activating `NSPanel`). Hover for play/pause, speed, font
   and mirror controls; `Space` pauses, `↑`/`↓` change speed, `Esc` closes.
   First-party `teleprompter` registry module; opens via `⌘⇧T`, the command
-  palette, or the right-click menu.
+  palette, or the right-click menu. Off until you turn it on in Settings.
 - Brain (`⌘⇧B` open / `⌘⇧I` capture): a default git-backed plain-Markdown ideas
   vault at `~/brain`, kept outside any project repo. `⌘⇧B` opens the vault in
   Tapa; `⌘⇧I` captures a fresh inbox note (`inbox/YYYY-MM-DD-<hash>.md`, seeded
   with a Compiled-truth + Timeline scaffold) and drops you straight into edit
   mode. The vault is created and `git init`'d on first use. First-party `brain`
-  registry module; both actions are also in the right-click "Tools" menu, and
-  "Open Brain" is offered on the welcome screen beside "Open Folder".
+  registry module; both actions are also in the right-click "Tools" menu. Off
+  until you turn it on in Settings.
 
 ## [0.3.0] - 2026-06-19
 
@@ -146,7 +164,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
-[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/aryrabelo/tapa/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/aryrabelo/tapa/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/aryrabelo/tapa/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/aryrabelo/tapa/compare/v0.2.1...v0.2.2

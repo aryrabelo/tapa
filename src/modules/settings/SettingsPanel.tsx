@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useStore } from "@/state/store";
 import { applyTheme, getStoredTheme, setStoredTheme, type Theme } from "@/lib/theme";
 import { Switch } from "@/components/ui/switch";
-import { TOGGLEABLE_PLUGINS, getDisabledPlugins, setPluginDisabled } from "@/lib/plugins";
-import { registry } from "@/lib/registry";
+import { isPluginEnabled, setPluginRunning, toggleablePlugins } from "@/lib/plugins";
 import { getPluginConfigValue, setPluginConfigValue } from "@/lib/plugin-config";
 import { pickFolder } from "@/lib/tauri";
 
@@ -17,18 +16,14 @@ const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
   { value: "system", label: "System", Icon: Monitor },
 ];
 
-// ⌘ / ⌥ glyphs keep the list compact; the label describes each binding.
-const SHORTCUTS: { keys: string; label: string }[] = [
+// Core shortcuts. Plugin shortcuts are appended only while that plugin is on,
+// so a switched-off feature does not advertise a key that does nothing.
+const CORE_SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "⌘K", label: "Jump to file" },
   { keys: "⌘F", label: "Find in file" },
   { keys: "⌘⇧F", label: "Search contents" },
   { keys: "⌘B", label: "Toggle sidebar" },
   { keys: "⌘S", label: "Save" },
-  { keys: "⌘⇧L", label: "Live-write" },
-  { keys: "⌘⇧P", label: "Presentation" },
-  { keys: "⌘⇧T", label: "Teleprompter" },
-  { keys: "⌘⇧B", label: "Open brain" },
-  { keys: "⌘⇧I", label: "Capture idea" },
   { keys: "⌘,", label: "Settings" },
 ];
 
@@ -48,11 +43,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   // Pre-fill the real vault path into the MCP commands when a folder is open.
   const vault = useStore((s) => s.root) ?? "/path/to/your/vault";
-  const [disabled, setDisabled] = useState(getDisabledPlugins);
+  const [pluginRev, setPluginRev] = useState(0);
+  const plugins = toggleablePlugins();
   // Per-plugin config values, keyed `${pluginId}::${key}`, seeded from persistence.
   const [cfg, setCfg] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
-    for (const p of TOGGLEABLE_PLUGINS) {
+    for (const p of plugins) {
       for (const field of p.config ?? []) {
         init[`${p.id}::${field.key}`] = getPluginConfigValue(p.id, field.key) ?? "";
       }
@@ -66,16 +62,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
   };
 
   const togglePlugin = (id: string) => {
-    const nextEnabled = disabled.has(id);
-    setPluginDisabled(id, !nextEnabled);
-    registry.setEnabled(id, nextEnabled);
-    setDisabled((prev) => {
-      const next = new Set(prev);
-      if (nextEnabled) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const nextEnabled = !isPluginEnabled(id);
+    void setPluginRunning(id, nextEnabled).then(() => setPluginRev((n) => n + 1));
   };
+
+  const shortcuts = [
+    ...CORE_SHORTCUTS,
+    ...plugins
+      .filter((p) => p.keys && isPluginEnabled(p.id))
+      .map((p) => ({ keys: p.keys as string, label: p.label ?? p.id })),
+  ];
 
   useEffect(() => {
     applyTheme(theme);
@@ -132,7 +128,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Keyboard shortcuts</h3>
             <ul className="flex flex-col gap-1 text-sm">
-              {SHORTCUTS.map(({ keys, label }) => (
+              {shortcuts.map(({ keys, label }) => (
                 <li key={keys} className="flex items-center justify-between">
                   <span className="text-muted-foreground">{label}</span>
                   <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums">
@@ -146,12 +142,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Plugins</h3>
             <p className="text-xs text-muted-foreground">Turn optional features on or off.</p>
-            <ul className="flex flex-col gap-1 text-sm">
-              {TOGGLEABLE_PLUGINS.map(({ id, label, keys, config }) => {
-                const enabled = !disabled.has(id);
+            <ul className="flex flex-col gap-3 text-sm">
+              {plugins.map(({ id, label, keys, config, blurb }) => {
+                const enabled = isPluginEnabled(id);
                 return (
-                  <li key={id} className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between">
+                  <li key={`${id}-${pluginRev}`} className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">
                         {label}
                         {keys ? (
@@ -166,7 +162,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
                         aria-label={`${enabled ? "Disable" : "Enable"} ${label}`}
                       />
                     </div>
-                    {config?.length ? (
+                    {blurb ? (
+                      <p className="text-[0.7rem] leading-relaxed text-muted-foreground">{blurb}</p>
+                    ) : null}
+                    {enabled && config?.length ? (
                       <div className="mt-1 flex flex-col gap-2 pl-1">
                         {config.map((field) => {
                           const fieldId = `plugin-cfg-${id}-${field.key}`;

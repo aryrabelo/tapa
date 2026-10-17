@@ -24,7 +24,7 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
     server: {
       deps: {
-        inline: [/react-markdown/, /zustand/, /use-sync-external-store/, /radix-ui/, /lucide-react/, /cmdk/],
+        inline: [/zustand/, /use-sync-external-store/, /radix-ui/, /lucide-react/, /cmdk/],
       },
     },
   },

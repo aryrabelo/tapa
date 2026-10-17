@@ -3,7 +3,7 @@ import { EditorState } from "@codemirror/state";
 import type { Decoration } from "@codemirror/view";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildDecorations, livePreview } from "./live-preview";
+import { buildDecorations, livePreview, markersRevealed } from "./live-preview";
 
 interface DecoHit {
   from: number;
@@ -43,6 +43,18 @@ afterEach(() => {
 });
 
 describe("livePreview buildDecorations", () => {
+  it("hides markers on the cursor line until the person interacts", () => {
+    const doc = "# Title\n";
+    const state = EditorState.create({
+      doc,
+      extensions: [markdown({ base: markdownLanguage }), markersRevealed, livePreview],
+    });
+    const v = new EditorView({ state, parent: document.body });
+    created.push(v);
+    const hidden = collect(v).find((h) => h.isReplace && h.from === 0);
+    expect(hidden?.to).toBe("# ".length);
+  });
+
   it("styles the heading line and hides bold markers on an inactive line", () => {
     const doc = "# Title\n**bold** text\n";
     const v = view(doc, 0); // cursor on line 1

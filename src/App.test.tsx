@@ -28,19 +28,8 @@ vi.mock("sonner", () => ({
 // Stub the CodeMirror-backed Editor so jsdom never instantiates it; expose the
 // exit/save handlers as plain buttons so the shell wiring can be driven.
 vi.mock("@/components/editor/Editor", () => ({
-  Editor: ({
-    onExit,
-    onSave,
-    onBlurSave,
-  }: {
-    onExit: () => void;
-    onSave: () => void;
-    onBlurSave: () => void;
-  }) => (
+  Editor: ({ onSave, onBlurSave }: { onSave: () => void; onBlurSave: () => void }) => (
     <div data-testid="editor-stub">
-      <button type="button" onClick={onExit}>
-        exit
-      </button>
       <button type="button" onClick={onSave}>
         save
       </button>
@@ -54,7 +43,6 @@ vi.mock("@/components/editor/Editor", () => ({
 import { listen } from "@tauri-apps/api/event";
 import {
   createPath,
-  pickFile,
   pickFolder,
   readFile,
   scanTree,
@@ -65,7 +53,6 @@ import {
 import { toast } from "sonner";
 import App from "./App";
 import { useStore } from "@/state/store";
-import { registry } from "@/lib/registry";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -80,7 +67,6 @@ beforeEach(() => {
       tree: [],
       activePath: null,
       content: "",
-      mode: "reader",
       dirty: false,
       editOffset: null,
     },
@@ -91,16 +77,10 @@ describe("App", () => {
   it("renders the empty state before a folder is opened", () => {
     render(<App />);
     expect(screen.getByText(/open a folder/i)).toBeInTheDocument();
-    // Welcome owns the open actions exactly once; the header has none yet.
-    expect(screen.getAllByRole("button", { name: /open folder/i })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: /open file/i })).toHaveLength(1);
-  });
-
-  it("runs brain.open from the welcome screen's Open Brain button", () => {
-    const run = vi.spyOn(registry, "runCommand").mockResolvedValue(undefined);
-    render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open brain/i }));
-    expect(run).toHaveBeenCalledWith("brain.open");
+    // One action on the empty screen. The header has no second open button.
+    expect(screen.getAllByRole("button", { name: /open my folder/i })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /open file/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open brain/i })).not.toBeInTheDocument();
   });
 
   it("renders without crashing when the Tauri runtime is unavailable", async () => {
@@ -133,13 +113,12 @@ describe("App", () => {
     vi.mocked(watchFolder).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
 
     expect(await screen.findByText("a.md")).toBeInTheDocument();
-    // No duplicate open-actions: once a folder is open the header owns them once,
-    // and the no-file hint in main carries none.
-    expect(screen.getAllByRole("button", { name: /open folder/i })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: /open file/i })).toHaveLength(1);
+    // Once a folder is open, the header does not repeat the open actions.
+    expect(screen.queryByRole("button", { name: /open my folder/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open file/i })).not.toBeInTheDocument();
   });
 
   it("creates a new file relative to the open folder via the sidebar +", async () => {
@@ -149,7 +128,7 @@ describe("App", () => {
     vi.mocked(createPath).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
     expect(await screen.findByText("a.md")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /new file or folder/i }));
@@ -161,7 +140,6 @@ describe("App", () => {
     await waitFor(() => {
       expect(createPath).toHaveBeenCalledWith("/vault/idea.md", false);
       expect(useStore.getState().activePath).toBe("idea.md");
-      expect(useStore.getState().mode).toBe("edit");
     });
   });
 
@@ -172,7 +150,7 @@ describe("App", () => {
     vi.mocked(createPath).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
     expect(await screen.findByText("a.md")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /new file or folder/i }));
@@ -183,8 +161,8 @@ describe("App", () => {
     await waitFor(() => {
       expect(createPath).toHaveBeenCalledWith("/vault/topics", true);
     });
-    // A bare directory stays in reader mode (no file opened).
-    expect(useStore.getState().mode).toBe("reader");
+    // A bare directory opens no note.
+    expect(useStore.getState().activePath).toBeNull();
   });
 
   it("toggles the sidebar open and closed", async () => {
@@ -193,7 +171,7 @@ describe("App", () => {
     vi.mocked(watchFolder).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
     expect(await screen.findByText("a.md")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /hide sidebar/i }));
@@ -203,47 +181,11 @@ describe("App", () => {
     expect(screen.getByText("a.md")).toBeInTheDocument();
   });
 
-  it("opens a single markdown file scoped to its parent folder", async () => {
-    vi.mocked(pickFile).mockResolvedValue("/a/b/note.md");
-    vi.mocked(readFile).mockResolvedValue("# Note\n\nbody");
-    vi.mocked(watchFolder).mockResolvedValue(undefined);
-
-    render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open file/i }));
-
-    await waitFor(() => {
-      const s = useStore.getState();
-      expect(s.root).toBe("/a/b");
-      expect(s.activePath).toBe("note.md");
-      expect(s.files).toEqual(["note.md"]);
-    });
-    // The file opens in edit mode now, so "note.md" comes from the sidebar.
-    expect(screen.getAllByText("note.md").length).toBeGreaterThan(0);
-    // read with the absolute path, watch scoped to the parent
-    expect(readFile).toHaveBeenCalledWith("/a/b/note.md");
-    expect(watchFolder).toHaveBeenCalledWith("/a/b");
-  });
-
-  it("opens a file directly in edit mode", async () => {
-    vi.mocked(pickFile).mockResolvedValue("/a/b/note.md");
-    vi.mocked(readFile).mockResolvedValue("# Note\n\nbody");
-    vi.mocked(watchFolder).mockResolvedValue(undefined);
-
-    render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open file/i }));
-
-    await waitFor(() => {
-      expect(useStore.getState().activePath).toBe("note.md");
-      expect(useStore.getState().mode).toBe("edit");
-    });
-  });
-
-  it("autosaves silently on blur only when dirty, staying in edit mode", async () => {
+  it("autosaves silently on blur only when dirty, and stays on the note", async () => {
     vi.mocked(writeFile).mockResolvedValue(undefined);
     act(() => {
       useStore.getState().setFolder("/vault", ["a.md"]);
       useStore.getState().setActive("a.md", "hello");
-      useStore.getState().enterEdit(0);
     });
 
     render(<App />);
@@ -254,11 +196,11 @@ describe("App", () => {
     await Promise.resolve();
     expect(writeFile).not.toHaveBeenCalled();
 
-    // Dirty: blur saves silently and stays in edit mode.
+    // Dirty: blur saves silently and the note stays open.
     act(() => useStore.getState().setContent("changed"));
     fireEvent.click(screen.getByRole("button", { name: "blur" }));
     await waitFor(() => expect(writeFile).toHaveBeenCalled());
-    expect(useStore.getState().mode).toBe("edit");
+    expect(screen.getByTestId("editor-stub")).toBeInTheDocument();
     expect(useStore.getState().dirty).toBe(false);
     expect(toast.success).not.toHaveBeenCalled();
   });
@@ -303,25 +245,22 @@ describe("App", () => {
     expect(watchFolder).toHaveBeenCalledWith("/x/y");
   });
 
-  it("keeps the editor open when save fails", async () => {
-    // Save rejects -> save() returns false -> onExit must NOT exit edit mode.
+  it("keeps the note open when save fails", async () => {
     vi.mocked(writeFile).mockRejectedValue(new Error("disk full"));
 
     act(() => {
       useStore.getState().setFolder("/vault", ["a.md"]);
       useStore.getState().setActive("a.md", "hello");
       useStore.getState().setContent("hello edited");
-      useStore.getState().enterEdit(0);
     });
 
     render(<App />);
     expect(await screen.findByTestId("editor-stub")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "exit" }));
+    fireEvent.click(screen.getByRole("button", { name: "save" }));
 
-    await waitFor(() => {
-      expect(useStore.getState().mode).toBe("edit");
-    });
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(screen.getByTestId("editor-stub")).toBeInTheDocument();
     expect(useStore.getState().dirty).toBe(true);
   });
 
@@ -390,37 +329,36 @@ describe("App", () => {
     expect(useStore.getState().content).toBe("reloaded from disk");
   });
 
-  it("Cmd-S (onSave) saves and returns to reader on success", async () => {
+  it("Cmd-S saves and stays on the note", async () => {
     vi.mocked(writeFile).mockResolvedValue(undefined);
     act(() => {
       useStore.getState().setFolder("/vault", ["a.md"]);
       useStore.getState().setActive("a.md", "hello");
       useStore.getState().setContent("hello edited");
-      useStore.getState().enterEdit(0);
     });
 
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "save" }));
 
-    await waitFor(() => expect(useStore.getState().mode).toBe("reader"));
+    await waitFor(() => expect(useStore.getState().dirty).toBe(false));
+    expect(screen.getByTestId("editor-stub")).toBeInTheDocument();
+    expect(screen.getByText("Saved")).toBeInTheDocument();
     expect(writeFile).toHaveBeenCalledWith("/vault/a.md", "hello edited");
   });
 
-  it("save via Cmd-S keeps editor open on failure", async () => {
+  it("save via Cmd-S keeps the note dirty when the write fails", async () => {
     vi.mocked(writeFile).mockRejectedValue(new Error("disk full"));
     act(() => {
       useStore.getState().setFolder("/vault", ["a.md"]);
       useStore.getState().setActive("a.md", "hello");
       useStore.getState().setContent("hello edited");
-      useStore.getState().enterEdit(0);
     });
 
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "save" }));
 
-    await waitFor(() => {
-      expect(useStore.getState().mode).toBe("edit");
-    });
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(screen.getByTestId("editor-stub")).toBeInTheDocument();
     expect(useStore.getState().dirty).toBe(true);
   });
 

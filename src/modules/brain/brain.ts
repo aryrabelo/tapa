@@ -28,8 +28,7 @@ export async function captureIdea(): Promise<void> {
   await writeFile(`${root}/${rel}`, seed);
   const files = await scanTree(root);
   useStore.getState().setFolder(root, files);
-  useStore.getState().setActive(rel, seed);
-  useStore.getState().enterEdit(seed.indexOf("# ") + 2);
+  useStore.getState().setActive(rel, seed, seed.indexOf("# ") + 2);
   try {
     await watchFolder(root);
   } catch {}

@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.3.0"
+version = "0.4.0"
 description = "A fast, minimal, Rust-based Markdown reader and editor."
 authors = ["Ary Rabelo <aryrabelo@gmail.com>"]
 license = "MIT"
@@ -38,22 +38,22 @@ regex = "1"
 memchr = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
-# CORS-free AssemblyAI streaming-token mint for the optional bug-capture
-# overlay. reqwest is already in the tree via tauri-plugin-updater (with its
-# rustls TLS stack), so we inherit that stack via feature unification.
-# That inherited stack ships rustls with NO default crypto provider, so we
-# pull `ring` and install it once at startup (see lib.rs) — otherwise building
-# any reqwest Client panics ("No rustls crypto provider is configured").
-reqwest = { version = "0.13", default-features = false }
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
+# Bug-capture only (`--features dev-capture`). A normal build does not compile
+# the AssemblyAI mint. reqwest may still arrive transitively via the updater.
+reqwest = { version = "0.13", default-features = false, optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring"], optional = true }
 # Load `.env` so the native token mint can read ASSEMBLYAI_API_KEY from the
 # host environment — the key is never exposed to the webview bundle.
-dotenvy = "0.15"
+dotenvy = { version = "0.15", optional = true }
 
 # macOS-only: CFString FFI for LaunchServices default-handler commands.
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
+
+[features]
+default = []
+dev-capture = ["dep:reqwest", "dep:rustls", "dep:dotenvy"]
 
 [dev-dependencies]
 tempfile = "3"

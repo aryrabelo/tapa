@@ -57,6 +57,8 @@ export interface ModuleContext {
   registerSidebarAction(action: SidebarAction): Disposer;
   onReaderRender(cb: (container: HTMLElement) => void): Disposer;
   registerStyle(css: string): Disposer;
+  /** CodeMirror extension. Torn down when the module is disabled. */
+  registerEditorExtension(ext: unknown): Disposer;
 }
 
 export interface Module {
@@ -82,6 +84,8 @@ export interface Registry {
   sidebarActions(): SidebarAction[];
   subscribeSidebar(cb: () => void): Disposer;
   emitReaderRender(container: HTMLElement): void;
+  editorExtensions(): unknown[];
+  subscribeEditorExtensions(cb: (exts: unknown[]) => void): Disposer;
 }
 
 export function createRegistry(): Registry {
@@ -100,6 +104,8 @@ export function createRegistry(): Registry {
   const sidebarItems = new Map<string, SidebarAction>();
   const sidebarSubs = new Set<() => void>();
   let sidebarSnapshot: SidebarAction[] = [];
+  const editorByModule = new Map<string, unknown[]>();
+  const editorSubs = new Set<(exts: unknown[]) => void>();
 
   const record = (moduleId: string, d: Disposer) => {
     const arr = disposers.get(moduleId) ?? [];
@@ -133,9 +139,22 @@ export function createRegistry(): Registry {
     for (const cb of sidebarSubs) cb();
   };
 
+  const editorExtensionList = (): unknown[] => [...editorByModule.values()].flat();
+
+  const notifyEditor = () => {
+    const list = editorExtensionList();
+    for (const cb of editorSubs) cb(list);
+  };
+
   const ctxFor = (moduleId: string): ModuleContext => ({
     registerCommand: (cmd) => {
       commands.set(cmd.id, { cmd, moduleId });
+      // Commands registered while active must leave with the module. Eager
+      // commands from `register()` stay and are only gated by `disabled`.
+      record(moduleId, () => {
+        const entry = commands.get(cmd.id);
+        if (entry?.moduleId === moduleId) commands.delete(cmd.id);
+      });
     },
     registerPanel: (panel) => {
       panels.set(panel.id, panel);
@@ -195,6 +214,21 @@ export function createRegistry(): Registry {
       record(moduleId, off);
       return off;
     },
+    registerEditorExtension: (ext) => {
+      const arr = editorByModule.get(moduleId) ?? [];
+      arr.push(ext);
+      editorByModule.set(moduleId, arr);
+      notifyEditor();
+      const off = () => {
+        const cur = editorByModule.get(moduleId) ?? [];
+        const next = cur.filter((item) => item !== ext);
+        if (next.length) editorByModule.set(moduleId, next);
+        else editorByModule.delete(moduleId);
+        notifyEditor();
+      };
+      record(moduleId, off);
+      return off;
+    },
   });
 
   const activate = async (moduleId: string) => {
@@ -219,7 +253,8 @@ export function createRegistry(): Registry {
       await activate(entry.moduleId);
       await entry.cmd.run(ctxFor(entry.moduleId));
     },
-    commands: () => [...commands.values()].map((e) => e.cmd),
+    commands: () =>
+      [...commands.values()].filter((e) => !disabled.has(e.moduleId)).map((e) => e.cmd),
     on,
     emit,
     deactivate(id) {
@@ -278,6 +313,14 @@ export function createRegistry(): Registry {
     emitReaderRender(container) {
       lastReaderContainer = container;
       for (const cb of readerRenderCbs) cb(container);
+    },
+    editorExtensions: editorExtensionList,
+    subscribeEditorExtensions(cb) {
+      editorSubs.add(cb);
+      cb(editorExtensionList());
+      return () => {
+        editorSubs.delete(cb);
+      };
     },
   };
 }

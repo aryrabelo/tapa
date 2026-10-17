@@ -151,6 +151,18 @@ mod tests {
 /// Wired to the overlay via `window.__BUGTOPROMPT__.mintStreamingToken`.
 #[tauri::command]
 pub async fn mint_assemblyai_token() -> Result<String, String> {
+    #[cfg(feature = "dev-capture")]
+    {
+        mint_assemblyai_token_inner().await
+    }
+    #[cfg(not(feature = "dev-capture"))]
+    {
+        Err("Bug capture is not in this build. Rebuild with --features dev-capture.".to_string())
+    }
+}
+
+#[cfg(feature = "dev-capture")]
+async fn mint_assemblyai_token_inner() -> Result<String, String> {
     // Key is read from the host environment (loaded from `.env` at startup), so
     // it never ships in the webview bundle. Absent key => voice stays disabled.
     let api_key = std::env::var("ASSEMBLYAI_API_KEY")

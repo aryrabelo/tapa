@@ -4,7 +4,6 @@
 // inputs, the CodeMirror editor) so copy/paste still works. When no module
 // contributes an applicable item, we fall back to just blocking the bare menu.
 import { registry, type ContextMenuItem, type ReaderContext } from "@/lib/registry";
-import { nearestSourceSpan } from "@/lib/source-map";
 import { useStore } from "@/state/store";
 
 const EDITABLE = "input, textarea, [contenteditable]:not([contenteditable='false'])";
@@ -54,22 +53,10 @@ export function runMenuItem(item: ContextMenuItem): void {
   if (ctx) item.run(ctx);
 }
 
-// 1-based source line for an offset. Allocation-free; a right-click is rare so
-// the linear scan is cheaper than slicing/splitting the document.
-function offsetToLine(text: string, offset: number): number {
-  let line = 1;
-  const end = Math.min(offset, text.length);
-  for (let i = 0; i < end; i++) if (text.charCodeAt(i) === 10) line++;
-  return line;
-}
-
 function buildReaderContext(target: Element): ReaderContext {
-  const { activePath, content } = useStore.getState();
-  const span = nearestSourceSpan(target);
-  const sourceOffset = span ? span.soStart : null;
-  const line = sourceOffset != null ? offsetToLine(content, sourceOffset) : null;
+  const { activePath } = useStore.getState();
   const selection = window.getSelection()?.toString() ?? "";
-  return { element: target, sourceOffset, line, selection, path: activePath };
+  return { element: target, sourceOffset: null, line: null, selection, path: activePath };
 }
 
 export function handleContextMenu(e: MouseEvent): void {

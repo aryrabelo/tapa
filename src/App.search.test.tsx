@@ -42,12 +42,14 @@ vi.mock("@/lib/tauri", () => ({
 
 import { readFile, searchContent } from "@/lib/tauri";
 import { registry } from "@/lib/registry";
+import { bootCorePlugins } from "@/lib/plugins";
 import { useStore } from "@/state/store";
 import App from "./App";
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
   onHitCb = null;
+  await bootCorePlugins();
   // Seed an open folder so the search effect has a root.
   useStore.setState({
     root: "/vault",
@@ -55,7 +57,6 @@ beforeEach(() => {
     tree: [],
     activePath: null,
     content: "",
-    mode: "reader",
     dirty: false,
     editOffset: null,
     scrollLine: null,

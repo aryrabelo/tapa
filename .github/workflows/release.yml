@@ -46,26 +46,31 @@ jobs:
             return data.id;
 
   build:
-    name: Build (${{ matrix.platform }})
+    name: Build (${{ matrix.name }})
     needs: create-release
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
+          # Apple Silicon on the repo's Mac. macos-latest is billed at 10x.
+          - name: macos-aarch64
+            runner: '["self-hosted", "macOS", "ARM64", "deploy"]'
             args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-          - platform: ubuntu-latest
+            rust_targets: aarch64-apple-darwin
+          - name: linux
+            runner: '"ubuntu-latest"'
             args: ""
-          - platform: windows-latest
+            rust_targets: ""
+          - name: windows
+            runner: '"windows-latest"'
             args: ""
-    runs-on: ${{ matrix.platform }}
+            rust_targets: ""
+    runs-on: ${{ fromJSON(matrix.runner) }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Tauri system dependencies (Linux)
-        if: matrix.platform == 'ubuntu-latest'
+        if: matrix.name == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -83,7 +88,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.rust_targets }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -106,3 +111,6 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+
+[You have received this identical output 3 times. Re-reading '/Users/aryrabelo/Sites/bora-team/tapa/.github/workflows/release.yml:raw' will not change it — use a narrower selector (path:A-B), or proceed with the edit.]

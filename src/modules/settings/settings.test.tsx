@@ -30,18 +30,19 @@ vi.mock("@/lib/tauri", () => ({
 }));
 
 import { registry } from "@/lib/registry";
+import { bootCorePlugins } from "@/lib/plugins";
 import { useStore } from "@/state/store";
 import App from "@/App";
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  await bootCorePlugins();
   useStore.setState({
     root: "/vault",
     files: [],
     tree: [],
     activePath: null,
     content: "",
-    mode: "reader",
     dirty: false,
     editOffset: null,
     scrollLine: null,
