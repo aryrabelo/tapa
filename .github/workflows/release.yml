@@ -111,6 +111,3 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
-
-
-[You have received this identical output 3 times. Re-reading '/Users/aryrabelo/Sites/bora-team/tapa/.github/workflows/release.yml:raw' will not change it — use a narrower selector (path:A-B), or proceed with the edit.]
