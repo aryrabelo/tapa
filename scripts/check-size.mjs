@@ -10,6 +10,7 @@
 // `checkSizes` is a pure function (no I/O) so it is unit-testable; the CLI
 // wrapper below does the filesystem work when this file is run directly.
 
+import { execFileSync } from "node:child_process";
 import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,14 +66,28 @@ function* walk(dir) {
 }
 
 function findArtifacts(targetDir) {
+  // Newest wins: a shared target dir can hold an older triple next to the
+  // bundle the job just built.
   let dmg = null;
   let app = null;
+  let dmgMtime = -1;
+  let appMtime = -1;
   const dmgMarker = "/release/bundle/dmg/";
   const appMarker = "/release/bundle/macos/";
   for (const { path: p, isDir } of walk(targetDir)) {
-    if (!dmg && !isDir && p.endsWith(".dmg") && p.includes(dmgMarker)) dmg = p;
-    if (!app && isDir && p.endsWith(".app") && p.includes(appMarker)) app = p;
-    if (dmg && app) break;
+    if (!isDir && p.endsWith(".dmg") && p.includes(dmgMarker)) {
+      const mtime = statSync(p).mtimeMs;
+      if (mtime > dmgMtime) {
+        dmg = p;
+        dmgMtime = mtime;
+      }
+    } else if (isDir && p.endsWith(".app") && p.includes(appMarker)) {
+      const mtime = statSync(p).mtimeMs;
+      if (mtime > appMtime) {
+        app = p;
+        appMtime = mtime;
+      }
+    }
   }
   return { dmg, app };
 }
@@ -81,6 +96,25 @@ function delta(bytes, limit) {
   if (limit === null) return "(no budget entry)";
   const d = bytes - limit;
   return `(${d >= 0 ? "+" : ""}${d})`;
+}
+
+// Cargo may write artifacts outside src-tauri/target when CARGO_TARGET_DIR
+// or a user .cargo/config.toml sets build.target-dir. `cargo metadata`
+// reports the directory actually used; src-tauri/target is the fallback.
+function resolveTargetDir(repoRoot) {
+  const manifest = join(repoRoot, "src-tauri", "Cargo.toml");
+  try {
+    const raw = execFileSync(
+      "cargo",
+      ["metadata", "--format-version", "1", "--no-deps", "--manifest-path", manifest],
+      { encoding: "utf8" },
+    );
+    const dir = JSON.parse(raw).target_directory;
+    if (typeof dir === "string" && dir.length > 0) return dir;
+  } catch {
+    // cargo missing or metadata failed: look in the default place
+  }
+  return join(repoRoot, "src-tauri", "target");
 }
 
 function main() {
@@ -95,12 +129,12 @@ function main() {
   }
 
   const budget = JSON.parse(readFileSync(budgetPath, "utf8"));
-  const targetDir = join(repoRoot, "src-tauri", "target");
+  const targetDir = resolveTargetDir(repoRoot);
   const { dmg, app } = findArtifacts(targetDir);
 
   const missing = [];
-  if (!dmg) missing.push("dmg (src-tauri/target/**/release/bundle/dmg/*.dmg)");
-  if (!app) missing.push("app (src-tauri/target/**/release/bundle/macos/*.app)");
+  if (!dmg) missing.push(`dmg (${targetDir}/**/release/bundle/dmg/*.dmg)`);
+  if (!app) missing.push(`app (${targetDir}/**/release/bundle/macos/*.app)`);
   if (missing.length) {
     console.log(`Expected macOS artifact(s) not found: ${missing.join(", ")}`);
     console.log("Build them first, e.g. `npm run tauri build -- --bundles dmg,app`.");
