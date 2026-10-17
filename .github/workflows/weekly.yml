@@ -33,6 +33,9 @@ jobs:
             args: ""
             id: windows
     runs-on: ${{ matrix.platform == 'macos' && fromJSON('["self-hosted", "macOS", "ARM64", "deploy"]') || matrix.platform }}
+    env:
+      # Same reason as release.yml: the .dmg step needs CI=true to skip Finder.
+      CI: "true"
     steps:
       - uses: actions/checkout@v4
 

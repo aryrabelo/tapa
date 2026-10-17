@@ -66,6 +66,10 @@ jobs:
             args: ""
             rust_targets: ""
     runs-on: ${{ fromJSON(matrix.runner) }}
+    env:
+      # Tauri skips the Finder AppleScript that lays out the .dmg only when
+      # CI is exactly "true". This Mac's runner does not set that itself.
+      CI: "true"
     steps:
       - uses: actions/checkout@v4
 
