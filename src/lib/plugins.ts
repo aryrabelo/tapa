@@ -235,14 +235,31 @@ function boot(which: "core" | "editor"): Promise<void> {
   return pending;
 }
 
+const enabledListeners = new Set<() => void>();
+
+/**
+ * Called whenever a plugin is switched on or off, from Settings or from a
+ * plugin's own toggle key, so an open Settings panel shows the real state.
+ */
+export function subscribePluginEnabled(cb: () => void): () => void {
+  enabledListeners.add(cb);
+  return () => {
+    enabledListeners.delete(cb);
+  };
+}
+
 /** Persist the choice and load or tear down the plugin. */
 export async function setPluginRunning(id: string, enabled: boolean): Promise<void> {
   const manifest = PLUGINS.find((p) => p.id === id);
   if (!manifest || manifest.defaultEnabled === undefined) return;
   writeOverride(id, enabled);
+  for (const cb of enabledListeners) cb();
   if (enabled) {
     await ensureLoaded(manifest);
-    registry.setEnabled(id, true);
+    // Two quick presses of a toggle key run two calls at once: the second may
+    // have switched the plugin off while this one waited for its code. The
+    // saved choice is the latest one, so it wins.
+    if (isPluginEnabled(id)) registry.setEnabled(id, true);
     return;
   }
   if (inflight.has(id)) registry.setEnabled(id, false);

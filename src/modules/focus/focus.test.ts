@@ -105,6 +105,64 @@ describe("dimming", () => {
     expect(sentenceAt(state, doc.indexOf("\n\n") + 1)).toBeNull();
   });
 
+  it("lights a fenced code block whole, blank lines included", () => {
+    const doc = "Intro here. More.\n\n```js\nconst a = 1;\n\nconst b = 2. Then c\n```\n\nAfter it.";
+    const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+    const fence = doc.slice(doc.indexOf("```"), doc.lastIndexOf("```") + 3);
+    for (const pos of [
+      doc.indexOf("const a"),
+      doc.indexOf("\n\nconst b") + 1,
+      doc.indexOf("Then"),
+    ]) {
+      const r = sentenceAt(state, pos);
+      expect(r && doc.slice(r.from, r.to)).toBe(fence);
+    }
+    const after = sentenceAt(state, doc.indexOf("After"));
+    expect(after && doc.slice(after.from, after.to)).toBe("After it.");
+  });
+
+  it("reads only around the caret in a long paragraph, with the same result", () => {
+    const doc = "Short one here. ".repeat(2000).trim();
+    const state = EditorState.create({ doc });
+    const sliceString = vi.spyOn(state.doc, "sliceString");
+    const pos = Math.floor(doc.length / 2) + 3;
+    expect(sentenceAt(state, pos)).toEqual(wholeParagraphSentence(state, pos));
+    sliceString.mockClear();
+    sentenceAt(state, pos);
+    const read = sliceString.mock.calls.reduce((n, [from, to = doc.length]) => n + to - from, 0);
+    expect(read).toBeLessThan(1000);
+  });
+
+  it("keeps a sentence's whole trailing space when the first window cuts through it", () => {
+    // The first window ends 256 characters past the caret, inside these spaces.
+    const doc = `${"x".repeat(250)}.${" ".repeat(20)}Next one.`;
+    const state = EditorState.create({ doc });
+    expect(sentenceAt(state, 0)).toEqual({ from: 0, to: 271 });
+    expect(sentenceAt(state, 0)).toEqual(wholeParagraphSentence(state, 0));
+  });
+
+  it("matches a whole-paragraph scan at every caret position", () => {
+    // Sentences longer than the first window, breaks at line ends, closers,
+    // indents and trailing spaces, so the growing window is exercised at its edges.
+    let seed = 7;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const PIECES = ["word ", "word", ". ", "! ", '?" ', "…) ", "... ", ".\n", "\n", "\n\n"];
+    const RARE = ["\n- item ", "\n# Head. Er\n", "\n  ", "  \n", "x".repeat(300), "a ".repeat(200)];
+    for (let round = 0; round < 4; round++) {
+      let doc = "";
+      while (doc.length < 2500) {
+        doc += rand(8) === 0 ? RARE[rand(RARE.length)] : PIECES[rand(PIECES.length)];
+      }
+      const state = EditorState.create({ doc });
+      for (let pos = 0; pos <= doc.length; pos++) {
+        expect(sentenceAt(state, pos), `pos ${pos}`).toEqual(wholeParagraphSentence(state, pos));
+      }
+    }
+  });
+
   it("never fades the autocomplete ghost on the lit sentence", () => {
     const notes = ["Ontem vi o rio Tapajós."];
     // Ghost first, as in the app (autocomplete boots before focus). In this
@@ -121,6 +179,40 @@ describe("dimming", () => {
     }
   });
 });
+
+// The scan sentenceAt replaced: copy the whole paragraph, regex it from the
+// top. Kept here as the oracle that the bounded scan must agree with.
+function wholeParagraphSentence(state: EditorState, pos: number) {
+  const HEADING = /^\s{0,3}#{1,6}(\s|$)/;
+  const BLOCK_START = /^\s{0,3}#{1,6}(\s|$)|^\s*([-*+]|\d+[.)])\s/;
+  const isBlank = (text: string) => text.trim() === "";
+  const doc = state.doc;
+  const line = doc.lineAt(pos);
+  if (isBlank(line.text)) return null;
+  let first = line.number;
+  let last = line.number;
+  if (!HEADING.test(line.text)) {
+    while (first > 1 && !BLOCK_START.test(doc.line(first).text)) {
+      const prev = doc.line(first - 1).text;
+      if (isBlank(prev) || HEADING.test(prev)) break;
+      first--;
+    }
+    while (last < doc.lines) {
+      const next = doc.line(last + 1).text;
+      if (isBlank(next) || BLOCK_START.test(next)) break;
+      last++;
+    }
+  }
+  const from = doc.line(first).from;
+  const to = doc.line(last).to;
+  let start = 0;
+  for (const m of doc.sliceString(from, to).matchAll(/[.!?…]+["'”’)\]*_]*\s+/g)) {
+    const next = m.index + m[0].length;
+    if (pos - from < next) return { from: from + start, to: from + next };
+    start = next;
+  }
+  return { from: from + start, to };
+}
 
 describe("caret", () => {
   it("draws a thick, steady caret only while dimming is on", async () => {

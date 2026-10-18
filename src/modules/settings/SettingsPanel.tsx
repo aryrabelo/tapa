@@ -1,12 +1,17 @@
 import type * as React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Monitor, Moon, Sun } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useStore } from "@/state/store";
 import { applyTheme, getStoredTheme, setStoredTheme, type Theme } from "@/lib/theme";
 import { Switch } from "@/components/ui/switch";
-import { isPluginEnabled, setPluginRunning, toggleablePlugins } from "@/lib/plugins";
+import {
+  isPluginEnabled,
+  setPluginRunning,
+  subscribePluginEnabled,
+  toggleablePlugins,
+} from "@/lib/plugins";
 import { getPluginConfigValue, setPluginConfigValue } from "@/lib/plugin-config";
 import { pickFolder } from "@/lib/tauri";
 
@@ -16,8 +21,8 @@ const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
   { value: "system", label: "System", Icon: Monitor },
 ];
 
-// Core shortcuts. Plugin shortcuts are appended only while that plugin is on,
-// so a switched-off feature does not advertise a key that does nothing.
+// Core shortcuts. A plugin's shortcut is appended while that plugin is on, and
+// always for a plugin with its own toggle key, since that key works while off.
 const CORE_SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "⌘K", label: "Jump to file" },
   { keys: "⌘F", label: "Find in file" },
@@ -26,6 +31,13 @@ const CORE_SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "⌘S", label: "Save" },
   { keys: "⌘,", label: "Settings" },
 ];
+
+// Which optional plugins are on, as a value that changes exactly when one is
+// switched. Compared by value, so it is a stable store snapshot.
+const enabledSnapshot = () =>
+  toggleablePlugins()
+    .map((p) => isPluginEnabled(p.id))
+    .join();
 
 function Code({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
@@ -43,7 +55,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   // Pre-fill the real vault path into the MCP commands when a folder is open.
   const vault = useStore((s) => s.root) ?? "/path/to/your/vault";
-  const [pluginRev, setPluginRev] = useState(0);
+  // ⌘⇧D and friends flip a plugin while this panel is open; reading the
+  // choice through a store keeps each switch true to it, so the next click
+  // does not undo the key. It also keys each row, remounting it on a change.
+  const pluginRev = useSyncExternalStore(subscribePluginEnabled, enabledSnapshot);
   const plugins = toggleablePlugins();
   // Per-plugin config values, keyed `${pluginId}::${key}`, seeded from persistence.
   const [cfg, setCfg] = useState<Record<string, string>>(() => {
@@ -62,8 +77,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
   };
 
   const togglePlugin = (id: string) => {
-    const nextEnabled = !isPluginEnabled(id);
-    void setPluginRunning(id, nextEnabled).then(() => setPluginRev((n) => n + 1));
+    void setPluginRunning(id, !isPluginEnabled(id));
   };
 
   const shortcuts = [

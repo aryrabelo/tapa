@@ -1,7 +1,9 @@
 // Focus mode: the sentence under the caret stays at full contrast and the rest
 // of the note fades. Typewriter scrolling keeps the caret's line in the middle
 // of the editor while you type or move with the keyboard.
+import { syntaxTree } from "@codemirror/language";
 import { EditorState, type Extension, Transaction } from "@codemirror/state";
+import type { SyntaxNode } from "@lezer/common";
 import {
   Decoration,
   type DecorationSet,
@@ -22,43 +24,98 @@ const BOUNDARY = /[.!?…]+["'”’)\]*_]*\s+/g;
 const isBlank = (text: string) => text.trim() === "";
 // A heading or a list item opens a block of its own.
 const BLOCK_START = /^\s{0,3}#{1,6}(\s|$)|^\s*([-*+]|\d+[.)])\s/;
+// Characters looked at on each side of the caret at first. The window grows
+// fourfold until it holds the whole sentence, so a keystroke costs about the
+// sentence's length, not the paragraph's.
+const WINDOW = 256;
+
+/** The fenced code block around `pos`, fences included, if the parser has reached it. */
+function fencedCodeAt(state: EditorState, pos: number): { from: number; to: number } | null {
+  const tree = syntaxTree(state);
+  // Side 1 then -1, so a caret just before the opening fence or just after
+  // the closing one still counts as inside.
+  for (const side of [1, -1] as const) {
+    for (let node: SyntaxNode | null = tree.resolveInner(pos, side); node; node = node.parent) {
+      if (node.name === "FencedCode") return { from: node.from, to: node.to };
+    }
+  }
+  return null;
+}
+
+/**
+ * The sentence around `pos` within `text`, which starts at doc position
+ * `from`, or null when the window is too narrow to tell. `atStart`/`atEnd`
+ * say whether the window's edges are the block's own edges.
+ */
+function sentenceInWindow(
+  text: string,
+  from: number,
+  pos: number,
+  atStart: boolean,
+  atEnd: boolean,
+): { from: number; to: number } | null {
+  const to = from + text.length;
+  let start = atStart ? from : -1;
+  let end = atEnd ? to : -1;
+  // A boundary's end is the end of its whitespace run, wherever the scan
+  // starts, so a window cut on the left cannot misplace one. A run that
+  // touches a cut on the right may go on past it, so that one is not trusted.
+  for (const m of text.matchAll(BOUNDARY)) {
+    const next = from + m.index + m[0].length;
+    if (next === to && !atEnd) break;
+    // A caret right after the whitespace belongs to the next sentence.
+    if (next > pos) {
+      end = next;
+      break;
+    }
+    start = next;
+  }
+  return start >= 0 && end >= 0 ? { from: start, to: end } : null;
+}
 
 /**
  * Range of the sentence containing `pos`, trailing whitespace included, or
  * null on a blank line. Sentences never cross a paragraph break; a heading is
- * one block on its own and each list item starts a new block. Code blocks are
- * not special-cased, so a fenced block reads as one paragraph.
+ * one block on its own and each list item starts a new block. Code has no
+ * sentences: a fenced code block, blank lines and all, is lit whole. That
+ * needs the Markdown parser; without it, or beyond what it has parsed in a
+ * huge note, a fence reads as ordinary paragraphs.
  */
 export function sentenceAt(state: EditorState, pos: number): { from: number; to: number } | null {
+  const fence = fencedCodeAt(state, pos);
+  if (fence) return fence;
   const doc = state.doc;
   const line = doc.lineAt(pos);
   if (isBlank(line.text)) return null;
+  const heading = HEADING.test(line.text);
+  // Whether line `n` is the first or last line of the caret's block.
+  const opensBlock = (n: number) => {
+    if (heading || n === 1 || BLOCK_START.test(doc.line(n).text)) return true;
+    const prev = doc.line(n - 1).text;
+    return isBlank(prev) || HEADING.test(prev);
+  };
+  const closesBlock = (n: number) => {
+    if (heading || n === doc.lines) return true;
+    const next = doc.line(n + 1).text;
+    return isBlank(next) || BLOCK_START.test(next);
+  };
   let first = line.number;
   let last = line.number;
-  if (!HEADING.test(line.text)) {
-    while (first > 1 && !BLOCK_START.test(doc.line(first).text)) {
-      const prev = doc.line(first - 1).text;
-      if (isBlank(prev) || HEADING.test(prev)) break;
-      first--;
-    }
-    while (last < doc.lines) {
-      const next = doc.line(last + 1).text;
-      if (isBlank(next) || BLOCK_START.test(next)) break;
-      last++;
-    }
+  for (let reach = WINDOW; ; reach *= 4) {
+    // Lines are only visited as far as the window reaches.
+    while (doc.line(first).from > pos - reach && !opensBlock(first)) first--;
+    while (doc.line(last).to < pos + reach && !closesBlock(last)) last++;
+    const from = Math.max(doc.line(first).from, pos - reach);
+    const to = Math.min(doc.line(last).to, pos + reach);
+    const found = sentenceInWindow(
+      doc.sliceString(from, to),
+      from,
+      pos,
+      from === doc.line(first).from && opensBlock(first),
+      to === doc.line(last).to && closesBlock(last),
+    );
+    if (found) return found;
   }
-  const from = doc.line(first).from;
-  const to = doc.line(last).to;
-  const text = doc.sliceString(from, to);
-  const offset = pos - from;
-  let start = 0;
-  for (const m of text.matchAll(BOUNDARY)) {
-    const next = m.index + m[0].length;
-    // A caret right after the whitespace belongs to the next sentence.
-    if (offset < next) return { from: from + start, to: from + next };
-    start = next;
-  }
-  return { from: from + start, to };
 }
 
 const dimMark = Decoration.mark({ class: DIM_CLASS });

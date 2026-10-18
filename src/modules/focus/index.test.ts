@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { editorPluginCompartment } from "@/lib/editor-extensions";
 import { attachEditorView } from "@/lib/editor-view";
 import { setPluginConfigValue } from "@/lib/plugin-config";
-import { isPluginEnabled } from "@/lib/plugins";
+import { isPluginEnabled, setPluginRunning } from "@/lib/plugins";
 import { registry } from "@/lib/registry";
 import { settingsModule } from "@/modules/settings";
 import { focusModule } from ".";
@@ -91,6 +91,29 @@ describe("focus plugin", () => {
     expect(dimmed()).toBeGreaterThan(0);
     expect(moveCentres()).toBe(false);
     expect(view.contentDOM.style.paddingBottom).toBe("");
+  });
+
+  it("changing the dim switch does not re-centre the note", async () => {
+    registry.register(focusModule);
+    registry.setEnabled("focus", true);
+    await vi.waitFor(() => expect(centreRequested()).toBe(true));
+
+    seen = [];
+    setPluginConfigValue("focus", "dim", "false");
+    setPluginConfigValue("focus", "dim", "true");
+    // Arrival centring runs in a microtask queued during the swap; this one runs after it.
+    await new Promise<void>((done) => queueMicrotask(done));
+    expect(centreRequested()).toBe(false);
+    expect(dimmed()).toBeGreaterThan(0);
+  });
+
+  it("on then off before the code arrives ends off", async () => {
+    const on = setPluginRunning("focus", true);
+    const off = setPluginRunning("focus", false);
+    await Promise.all([on, off]);
+    expect(isPluginEnabled("focus")).toBe(false);
+    expect(registry.editorExtensions()).toEqual([]);
+    expect(dimmed()).toBe(0);
   });
 
   it("⌘⇧D turns the whole plugin on from off, then off again", async () => {
