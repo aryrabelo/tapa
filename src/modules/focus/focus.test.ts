@@ -173,7 +173,7 @@ describe("dimming", () => {
       const caret = doc.indexOf("o rio T") + "o rio T".length;
       const { view } = mount(doc, caret, [ghostText(() => notes), dimOtherSentences()]);
       const ghost = view.contentDOM.querySelector(".cm-tapa-ghost");
-      expect(ghost?.textContent).toBe("apajós");
+      expect(ghost?.textContent).toBe("apajós.");
       expect(ghost?.closest(".cm-tapa-dim")).toBeNull();
       expect(textBy(view, true)).toContain("Antes.");
     }
