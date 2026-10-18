@@ -9,6 +9,7 @@ describe("plugin defaults", () => {
   it("turns formatted reading and tables on, and teleprompter and brain off", () => {
     expect(isPluginEnabled("live-preview")).toBe(true);
     expect(isPluginEnabled("tables")).toBe(true);
+    expect(isPluginEnabled("autocomplete")).toBe(true);
     expect(isPluginEnabled("teleprompter")).toBe(false);
     expect(isPluginEnabled("brain")).toBe(false);
     expect(isPluginEnabled("search")).toBe(true);
