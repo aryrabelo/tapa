@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Focus plugin (off by default, `⌘⇧D` turns it on or off): the sentence under
+  the caret stays dark and the rest of the note fades, and the caret becomes a
+  thicker line that does not blink, so it is easy to find. The caret's line
+  also stays in the middle of the window while you type or move with the arrow
+  keys. Fading and centring each have their own switch in Settings. A code
+  block stays lit as a whole while the caret is in it.
 - Autocomplete plugin (on by default): while you type, the rest of the word
   (and a few words after it, when your notes agree) appears in gray, taken from
   the other notes in the open folder and the note itself. Tab keeps it, Esc

@@ -1,3 +1,4 @@
+import { isPluginEnabled, PLUGINS, setPluginRunning } from "@/lib/plugins";
 import type { Module } from "@/lib/registry";
 
 // Settings is a ⌘, command (registered eagerly, cheap) that lazily activates
@@ -16,6 +17,16 @@ export const settingsModule: Module = {
       title: "Close settings",
       run: (ctx) => ctx.hidePanel(),
     });
+    // Lives here, always loaded, so the key can switch on a plugin that is off.
+    for (const { id, toggle } of PLUGINS) {
+      if (!toggle) continue;
+      reg.command({
+        id: `${id}.toggle`,
+        title: toggle.title,
+        keybinding: toggle.keybinding,
+        run: () => setPluginRunning(id, !isPluginEnabled(id)),
+      });
+    }
   },
   activate(ctx) {
     ctx.registerContextMenuItem({

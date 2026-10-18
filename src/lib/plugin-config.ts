@@ -5,6 +5,8 @@ const STORAGE_KEY = "tapa-plugin-config";
 
 type ConfigStore = Record<string, Record<string, string>>;
 
+const listeners = new Set<(pluginId: string, key: string) => void>();
+
 function readStore(): ConfigStore {
   if (typeof localStorage === "undefined") return {};
   try {
@@ -27,4 +29,13 @@ export function setPluginConfigValue(pluginId: string, key: string, value: strin
   const obj = readStore();
   obj[pluginId] = { ...obj[pluginId], [key]: value };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+  for (const cb of listeners) cb(pluginId, key);
+}
+
+/** Called after every save, so a running plugin can apply a change without a restart. */
+export function subscribePluginConfig(cb: (pluginId: string, key: string) => void): () => void {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 }

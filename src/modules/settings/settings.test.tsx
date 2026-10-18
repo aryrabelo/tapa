@@ -30,7 +30,8 @@ vi.mock("@/lib/tauri", () => ({
 }));
 
 import { registry } from "@/lib/registry";
-import { bootCorePlugins } from "@/lib/plugins";
+import { bootCorePlugins, isPluginEnabled } from "@/lib/plugins";
+import { getPluginConfigValue } from "@/lib/plugin-config";
 import { useStore } from "@/state/store";
 import App from "@/App";
 
@@ -77,5 +78,34 @@ describe("App settings (⌘,)", () => {
     });
 
     expect(screen.queryByText("Keyboard shortcuts")).not.toBeInTheDocument();
+  });
+
+  it("shows a plugin's toggle fields as switches that save true/false", async () => {
+    localStorage.setItem("tapa-plugin-overrides", JSON.stringify({ focus: true }));
+    render(<App />);
+    fireEvent.keyDown(window, { key: ",", metaKey: true });
+
+    const centred = await screen.findByRole("switch", { name: "Keep the line centred" });
+    expect(centred).toHaveAttribute("aria-checked", "true"); // unset reads as on
+    fireEvent.click(centred);
+    expect(getPluginConfigValue("focus", "typewriter")).toBe("false");
+    expect(centred).toHaveAttribute("aria-checked", "false");
+    localStorage.clear();
+  });
+
+  it("follows ⌘⇧D while open, so the next click does not undo it", async () => {
+    localStorage.clear();
+    render(<App />);
+    fireEvent.keyDown(window, { key: ",", metaKey: true });
+    expect(await screen.findByRole("switch", { name: "Enable Focus" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "D", metaKey: true, shiftKey: true });
+    const sw = await screen.findByRole("switch", { name: "Disable Focus" });
+    expect(sw).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(sw);
+    await screen.findByRole("switch", { name: "Enable Focus" });
+    expect(isPluginEnabled("focus")).toBe(false);
+    localStorage.clear();
   });
 });

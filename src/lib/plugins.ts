@@ -7,7 +7,8 @@ import { registry } from "@/lib/registry";
 export interface ConfigField {
   key: string;
   label: string;
-  type: "text" | "dir";
+  /** A toggle is stored as "true"/"false"; unset reads as on. */
+  type: "text" | "dir" | "toggle";
   placeholder?: string;
   help?: string;
 }
@@ -24,6 +25,11 @@ export interface PluginManifest {
   editor?: boolean;
   /** Activate as soon as the module loads. Otherwise the first command activates it. */
   eager?: boolean;
+  /**
+   * A command that turns the whole plugin on or off. Settings registers it, not
+   * the plugin: a plugin that is off is not loaded and could not switch itself on.
+   */
+  toggle?: { title: string; keybinding: string };
   config?: ConfigField[];
   load: () => Promise<Module>;
 }
@@ -78,6 +84,21 @@ export const PLUGINS: readonly PluginManifest[] = [
     editor: true,
     eager: true,
     load: () => import("@/modules/autocomplete").then((m) => m.autocompleteModule),
+  },
+  {
+    id: "focus",
+    label: "Focus",
+    blurb: "Fades everything but the sentence you are writing and keeps it in the middle.",
+    keys: "⌘⇧D",
+    defaultEnabled: false,
+    editor: true,
+    eager: true,
+    toggle: { title: "Toggle focus mode", keybinding: "mod+shift+d" },
+    config: [
+      { key: "dim", label: "Dim other sentences", type: "toggle" },
+      { key: "typewriter", label: "Keep the line centred", type: "toggle" },
+    ],
+    load: () => import("@/modules/focus").then((m) => m.focusModule),
   },
   {
     id: "teleprompter",
@@ -214,14 +235,31 @@ function boot(which: "core" | "editor"): Promise<void> {
   return pending;
 }
 
+const enabledListeners = new Set<() => void>();
+
+/**
+ * Called whenever a plugin is switched on or off, from Settings or from a
+ * plugin's own toggle key, so an open Settings panel shows the real state.
+ */
+export function subscribePluginEnabled(cb: () => void): () => void {
+  enabledListeners.add(cb);
+  return () => {
+    enabledListeners.delete(cb);
+  };
+}
+
 /** Persist the choice and load or tear down the plugin. */
 export async function setPluginRunning(id: string, enabled: boolean): Promise<void> {
   const manifest = PLUGINS.find((p) => p.id === id);
   if (!manifest || manifest.defaultEnabled === undefined) return;
   writeOverride(id, enabled);
+  for (const cb of enabledListeners) cb();
   if (enabled) {
     await ensureLoaded(manifest);
-    registry.setEnabled(id, true);
+    // Two quick presses of a toggle key run two calls at once: the second may
+    // have switched the plugin off while this one waited for its code. The
+    // saved choice is the latest one, so it wins.
+    if (isPluginEnabled(id)) registry.setEnabled(id, true);
     return;
   }
   if (inflight.has(id)) registry.setEnabled(id, false);
