@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-18
+
 ### Added
 - Focus plugin (off by default, `⌘⇧D` turns it on or off): the sentence under
   the caret stays dark and the rest of the note fades, and the caret becomes a
@@ -187,7 +189,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
-[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/aryrabelo/tapa/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/aryrabelo/tapa/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/aryrabelo/tapa/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/aryrabelo/tapa/compare/v0.2.2...v0.2.3
