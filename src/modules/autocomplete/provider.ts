@@ -1,16 +1,19 @@
 // Pure suggestion logic. Given the text of the user's notes and what is typed
-// before the caret on the current line, return the rest of the word (and a few
-// following words) as it already appears somewhere in the notes. No I/O here.
+// before the caret on the current line, return the rest of the word and of its
+// sentence as it already appears somewhere in the notes. No I/O here.
 
 const W = "\\p{L}\\p{M}\\p{N}_";
 const WORD_CHAR = new RegExp(`[${W}]`, "u");
 // Rest of the word being typed. May cross an inner hyphen or apostrophe ("bem-vindo").
 const WORD_REST = new RegExp(`^(?:[-'’]?[${W}]+)+`, "u");
-/** Following words the suggestion may add, after the word itself. */
-export const MAX_EXTRA_WORDS = 3;
-// Only single-space-separated words; any comma, period or line break ends it.
-const EXTRA_WORDS = new RegExp(`^(?: [${W}]+(?:[-'’][${W}]+)*){0,${MAX_EXTRA_WORDS}}`, "u");
 const SENTENCE_END = /[.!?…]\s+/g;
+// Terminal punctuation, with any closing quote or bracket, followed by whitespace or
+// the end of the line: "3.5" goes on, "largo." ends. Abbreviations ("Sr. Silva") end
+// it too; telling them apart would need a dictionary.
+const SENTENCE_STOP = /[.!?…]+["'”’»)\]]*(?=\s|$)/u;
+const LINE_BREAK = /[\r\n]/;
+/** Longest suggestion in UTF-16 units, the finished word included. */
+export const MAX_SUGGESTION = 120;
 
 /** Typed context below this length never triggers a lookup. */
 export const MIN_CONTEXT = 3;
@@ -18,6 +21,8 @@ export const MIN_CONTEXT = 3;
 const MAX_QUERY_WORDS = 5;
 /** Occurrences tallied per lookup, so a common prefix stays cheap. */
 const MAX_HITS = 64;
+// Text read after each hit. Larger than MAX_SUGGESTION, so a sentence the window cuts
+// short is always capped rather than mistaken for a finished one.
 const TAIL_WINDOW = 200;
 
 const isWordChar = (ch: string | undefined): boolean => ch !== undefined && WORD_CHAR.test(ch);
@@ -44,16 +49,42 @@ export function queriesFor(before: string): string[] {
 
 interface Tally {
   count: number;
-  extra: string[]; // following words every occurrence of this completion agrees on
+  rests: string[]; // what follows the word at each occurrence, up to the sentence end
 }
 
-function commonPrefix(a: string[], b: string[]): string[] {
+/**
+ * What follows a finished word up to the end of its sentence: through the terminal
+ * punctuation, never past a line break, and cut back to a space when longer than
+ * `room`, so the cap never splits a word.
+ */
+function sentenceRest(text: string, room: number): string {
+  const nl = text.search(LINE_BREAK);
+  const line = nl === -1 ? text : text.slice(0, nl);
+  const stop = SENTENCE_STOP.exec(line);
+  const rest = stop ? line.slice(0, stop.index + stop[0].length) : line.trimEnd();
+  if (rest.length <= room) return rest;
+  const space = rest.lastIndexOf(" ", room);
+  return space > 0 ? rest.slice(0, space).trimEnd() : "";
+}
+
+/**
+ * The part of `rests` every occurrence agrees on. Where they diverge, cut back to
+ * the end of the last whole word, so a disagreement never suggests half a word.
+ */
+function agreedRest(rests: readonly string[]): string {
+  const first = rests[0] ?? "";
   let n = 0;
-  while (n < a.length && n < b.length && a[n] === b[n]) n++;
-  return a.slice(0, n);
+  while (n < first.length && rests.every((r) => r[n] === first[n])) n++;
+  if (rests.every((r) => r.length === n)) return first;
+  for (let k = n; k > 0; k--) {
+    if (isWordChar(first[k - 1]) && rests.every((r) => !isWordChar(r[k]))) {
+      return first.slice(0, k);
+    }
+  }
+  return "";
 }
 
-/** Count how each occurrence of `q` in `src` would finish the word. */
+/** Count how each occurrence of `q` in `src` would finish the word and its sentence. */
 function tallyIn(src: string, q: string, tallies: Map<string, Tally>, budget: number): number {
   let used = 0;
   let at = src.indexOf(q);
@@ -63,14 +94,12 @@ function tallyIn(src: string, q: string, tallies: Map<string, Tally>, budget: nu
       const after = src.slice(at + q.length, at + q.length + TAIL_WINDOW);
       const word = WORD_REST.exec(after)?.[0];
       if (word) {
-        const extra = (EXTRA_WORDS.exec(after.slice(word.length))?.[0] ?? "")
-          .split(" ")
-          .filter(Boolean);
+        const rest = sentenceRest(after.slice(word.length), MAX_SUGGESTION - word.length);
         const prev = tallies.get(word);
         if (prev) {
           prev.count++;
-          prev.extra = commonPrefix(prev.extra, extra);
-        } else tallies.set(word, { count: 1, extra });
+          prev.rests.push(rest);
+        } else tallies.set(word, { count: 1, rests: [rest] });
         used++;
       }
     }
@@ -90,8 +119,8 @@ function bestTail(sources: readonly string[], q: string): string | null {
   // Most frequent completion wins; a tie keeps the one seen first.
   for (const entry of tallies) if (!best || entry[1].count > best[1].count) best = entry;
   if (!best) return null;
-  const [word, { extra }] = best;
-  return extra.length ? `${word} ${extra.join(" ")}` : word;
+  const [word, { rests }] = best;
+  return word + agreedRest(rests);
 }
 
 /**

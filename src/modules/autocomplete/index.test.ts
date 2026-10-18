@@ -73,7 +73,7 @@ describe("autocomplete plugin", () => {
     // Notes load in the background; each caret set recomputes.
     await vi.waitFor(() => {
       view.dispatch({ selection: { anchor: 7 } });
-      expect(ghost()).toBe("apajós");
+      expect(ghost()).toBe("apajós.");
     });
 
     // Switching to other.md makes it the live note, so its loaded copy drops out.
