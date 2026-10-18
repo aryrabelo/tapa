@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Saving a note can no longer leave it empty or half-written. The new text goes
+  to a hidden temp file in the same folder, is flushed to disk, and only then
+  replaces the note in one rename. A failed save leaves the old note as it was.
+  Permissions and symlinks are kept, and a read-only note is refused as before.
+  Saving no longer re-scans the sidebar tree.
+
 ## [0.4.0] - 2026-10-17
 
 ### Changed

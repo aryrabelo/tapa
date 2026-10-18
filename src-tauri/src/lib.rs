@@ -1,3 +1,4 @@
+mod atomic_write;
 mod brain;
 mod commands;
 mod default_handler;

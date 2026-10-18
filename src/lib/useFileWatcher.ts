@@ -35,13 +35,17 @@ export function useFileWatcher(): void {
       return paths.some((p) => normalize(p) === absNorm);
     };
 
-    // True unless every changed path IS the active file — avoids rescan storms
+    // True unless every changed path IS the active file or a save's temp file
+    // (`.tapa-tmp.*`, see src-tauri/src/atomic_write.rs) — avoids rescan storms
     // while editing/saving the open file.
     const touchesTree = (paths: string[]): boolean => {
       const { root, activePath } = useStore.getState();
       if (!root || paths.length === 0) return false;
       const absActive = activePath ? normalize(`${root}/${activePath}`) : null;
-      return paths.some((p) => normalize(p) !== absActive);
+      return paths.some((p) => {
+        const n = normalize(p);
+        return n !== absActive && !n.split("/").pop()?.startsWith(".tapa-tmp.");
+      });
     };
 
     const rescanTree = async () => {
