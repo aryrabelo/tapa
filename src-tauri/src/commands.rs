@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::search::{search_dir, Hit, SearchOpts};
 use tauri::ipc::Channel;
@@ -35,9 +35,11 @@ pub fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&p).map_err(|_| "Not a UTF-8 text file".to_string())
 }
 
+/// Save a note crash-safely: a failed or interrupted save leaves the old bytes.
 #[tauri::command]
 pub fn write_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(PathBuf::from(&path), content).map_err(|e| e.to_string())
+    crate::atomic_write::write_atomic(Path::new(&path), content.as_bytes())
+        .map_err(|e| e.to_string())
 }
 
 /// Create a new file or directory at `path` (absolute), making parent dirs as
@@ -103,6 +105,37 @@ mod tests {
         let path = f.to_string_lossy().to_string();
         write_file(path.clone(), "# hi\n".into()).unwrap();
         assert_eq!(read_file(path).unwrap(), "# hi\n");
+    }
+
+    #[test]
+    fn write_file_replaces_note_with_exact_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("note.md");
+        fs::write(&f, "antes, e mais um tanto").unwrap();
+        let path = f.to_string_lossy().to_string();
+        write_file(path, "depois".into()).unwrap();
+
+        // Shorter content must not leave a tail of the old bytes behind.
+        assert_eq!(fs::read(&f).unwrap(), b"depois");
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["note.md"]);
+    }
+
+    /// An in-place write (`std::fs::write`) truncates the same inode; only a
+    /// rename swaps in a new one. Fails if `write_file` stops being atomic.
+    #[cfg(unix)]
+    #[test]
+    fn write_file_swaps_inode_instead_of_truncating() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("note.md");
+        fs::write(&f, "antes").unwrap();
+        let before = fs::metadata(&f).unwrap().ino();
+        write_file(f.to_string_lossy().to_string(), "depois".into()).unwrap();
+        assert_ne!(fs::metadata(&f).unwrap().ino(), before);
     }
 
     #[test]

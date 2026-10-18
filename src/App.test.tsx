@@ -329,6 +329,30 @@ describe("App", () => {
     expect(useStore.getState().content).toBe("reloaded from disk");
   });
 
+  it("does not rescan the tree for a save's own temp file, but does for a new note", async () => {
+    vi.mocked(readFile).mockResolvedValue("orig");
+    vi.mocked(scanTree).mockResolvedValue(["a.md", "b.md"]);
+    act(() => {
+      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setActive("a.md", "orig");
+    });
+
+    render(<App />);
+    await waitFor(() => expect(fileChangedCb).toBeTypeOf("function"));
+    vi.mocked(scanTree).mockClear();
+
+    // What an atomic save of a.md emits: the hidden temp, then the note itself.
+    await act(async () => {
+      await fileChangedCb?.({ payload: ["/vault/.tapa-tmp.42.1.0", "/vault/a.md"] });
+    });
+    expect(scanTree).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await fileChangedCb?.({ payload: ["/vault/b.md"] });
+    });
+    await waitFor(() => expect(scanTree).toHaveBeenCalledWith("/vault"));
+  });
+
   it("Cmd-S saves and stays on the note", async () => {
     vi.mocked(writeFile).mockResolvedValue(undefined);
     act(() => {
