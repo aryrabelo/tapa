@@ -2,7 +2,14 @@
 // Esc hides it until the next edit. The suggestion comes from `suggest`, fed
 // with the other notes plus the live document.
 import { syntaxTree } from "@codemirror/language";
-import { type EditorState, type Extension, Prec, StateEffect, StateField } from "@codemirror/state";
+import {
+  type ChangeSet,
+  type EditorState,
+  type Extension,
+  Prec,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -116,12 +123,29 @@ let nextGlowId = 0;
 // theirs, so it stays plain. Typing inside the phrase does extend the mark.
 const glowMark = (id: number) => Decoration.mark({ class: ACCEPTED_CLASS, id });
 
+/** Whether one change (or a run of adjacent ones) replaces all of `from`–`to`. */
+function replacesAll(changes: ChangeSet, from: number, to: number): boolean {
+  let all = false;
+  changes.iterChangedRanges((fromA, toA) => {
+    if (fromA <= from && toA >= to) all = true;
+  });
+  return all;
+}
+
 // Marks are mapped through every change; a mark whose text gets deleted
 // becomes empty and RangeSet.map drops it, so edits never leave it dangling.
+// Mapping would keep a mark whose whole text was replaced (select the phrase,
+// type), glowing on the new text, so such a mark is dropped first. An edit
+// that leaves some of the accepted text keeps the glow.
 const glowField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(marks, tr) {
-    let next = marks.map(tr.changes);
+    let next = marks;
+    if (tr.docChanged) {
+      next = next
+        .update({ filter: (from, to) => !replacesAll(tr.changes, from, to) })
+        .map(tr.changes);
+    }
     for (const e of tr.effects) {
       if (e.is(addGlow)) {
         next = next.update({ add: [glowMark(e.value.id).range(e.value.from, e.value.to)] });

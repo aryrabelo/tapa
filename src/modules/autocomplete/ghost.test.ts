@@ -91,6 +91,29 @@ describe("the glow on accepted text", () => {
     expect(glowing(view)).toEqual([]);
   });
 
+  it("drops when the whole phrase is selected and typed over", () => {
+    const view = mount("o rio Tapajós\n");
+    const inserted = acceptAfter(view, "o rio T");
+    const end = view.state.doc.length;
+    view.dispatch({
+      changes: { from: end - inserted.length, to: end, insert: "x" },
+      userEvent: "input.type",
+    });
+    expect(view.state.doc.toString()).toBe("o rio Tapajós\no rio Tx");
+    expect(glowing(view)).toEqual([]);
+  });
+
+  it("keeps glowing when only part of the phrase is replaced", () => {
+    const view = mount("o rio Tapajós\n");
+    const inserted = acceptAfter(view, "o rio T");
+    const end = view.state.doc.length;
+    view.dispatch({
+      changes: { from: end - 2, to: end - 1, insert: "x" },
+      userEvent: "input.type",
+    });
+    expect(glowing(view)).toEqual([`${inserted.slice(0, -2)}x${inserted.slice(-1)}`]);
+  });
+
   it("does not appear when Tab had no ghost to accept", () => {
     const view = mount("nada aqui\n");
     type(view, "xyz");

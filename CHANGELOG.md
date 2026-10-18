@@ -15,10 +15,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   block stays lit as a whole while the caret is in it.
 - Autocomplete plugin (on by default): while you type, the rest of the
   sentence appears in gray, taken from the other notes in the open folder and
-  the note itself. When the notes disagree it offers only the part they share,
-  at least the rest of the word. Tab keeps it, Esc hides it. The text Tab adds
-  flashes in a rainbow gradient for about a second and a half, then turns into
-  normal text, so you see what was added. Nothing is sent over the network.
+  the note itself. If the notes finish the word in different ways, it picks the
+  most common one; if the sentence then goes on differently, it offers only the
+  words they share after that word, or just the word. Tab keeps it, Esc hides
+  it. The text Tab adds flashes in a rainbow gradient for about a second and a
+  half, then turns into normal text, so you see what was added. Nothing is sent
+  over the network.
 
 ### Fixed
 - Saving a note can no longer leave it empty or half-written. The new text goes

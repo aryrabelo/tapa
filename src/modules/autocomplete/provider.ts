@@ -7,11 +7,13 @@ const WORD_CHAR = new RegExp(`[${W}]`, "u");
 // Rest of the word being typed. May cross an inner hyphen or apostrophe ("bem-vindo").
 const WORD_REST = new RegExp(`^(?:[-'’]?[${W}]+)+`, "u");
 const SENTENCE_END = /[.!?…]\s+/g;
-// Terminal punctuation, with any closing quote or bracket, followed by whitespace or
-// the end of the line: "3.5" goes on, "largo." ends. Abbreviations ("Sr. Silva") end
-// it too; telling them apart would need a dictionary.
-const SENTENCE_STOP = /[.!?…]+["'”’»)\]]*(?=\s|$)/u;
+// Terminal punctuation, with any closing quote, bracket or Markdown emphasis/code
+// delimiter ("**Fim.** Depois" ends at the "**"), followed by whitespace or the end of
+// the line: "3.5" goes on, "largo." ends. Abbreviations ("Sr. Silva") end it too;
+// telling them apart would need a dictionary.
+const SENTENCE_STOP = /[.!?…]+[*_`~"'”’»)\]]*(?=\s|$)/u;
 const LINE_BREAK = /[\r\n]/;
+const SPACE = /\s/;
 /** Longest suggestion in UTF-16 units, the finished word included. */
 export const MAX_SUGGESTION = 120;
 
@@ -54,8 +56,8 @@ interface Tally {
 
 /**
  * What follows a finished word up to the end of its sentence: through the terminal
- * punctuation, never past a line break, and cut back to a space when longer than
- * `room`, so the cap never splits a word.
+ * punctuation, never past a line break, and cut back to whitespace (space, tab, NBSP)
+ * when longer than `room`, so the cap never splits a word.
  */
 function sentenceRest(text: string, room: number): string {
   const nl = text.search(LINE_BREAK);
@@ -63,8 +65,9 @@ function sentenceRest(text: string, room: number): string {
   const stop = SENTENCE_STOP.exec(line);
   const rest = stop ? line.slice(0, stop.index + stop[0].length) : line.trimEnd();
   if (rest.length <= room) return rest;
-  const space = rest.lastIndexOf(" ", room);
-  return space > 0 ? rest.slice(0, space).trimEnd() : "";
+  let cut = room;
+  while (cut > 0 && !SPACE.test(rest[cut])) cut--;
+  return cut > 0 ? rest.slice(0, cut).trimEnd() : "";
 }
 
 /**
@@ -93,7 +96,9 @@ function tallyIn(src: string, q: string, tallies: Map<string, Tally>, budget: nu
     if (!isWordChar(src[at - 1])) {
       const after = src.slice(at + q.length, at + q.length + TAIL_WINDOW);
       const word = WORD_REST.exec(after)?.[0];
-      if (word) {
+      // A word too long to fit the cap on its own is never offered: cutting it would
+      // suggest half a word, and not cutting it would break the cap.
+      if (word && word.length <= MAX_SUGGESTION) {
         const rest = sentenceRest(after.slice(word.length), MAX_SUGGESTION - word.length);
         const prev = tallies.get(word);
         if (prev) {

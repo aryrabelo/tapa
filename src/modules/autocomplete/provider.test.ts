@@ -29,6 +29,21 @@ describe("suggest", () => {
     );
   });
 
+  it("ends the sentence at closing Markdown emphasis or code after the punctuation", () => {
+    expect(suggest(["o rio **Tapajós é largo.** Depois choveu."], "o rio **T")).toBe(
+      "apajós é largo.**",
+    );
+    expect(suggest(["o rio _Tapajós é largo._ Depois choveu."], "o rio _T")).toBe(
+      "apajós é largo._",
+    );
+    expect(suggest(["o rio ~~Tapajós é largo.~~ Depois choveu."], "o rio ~~T")).toBe(
+      "apajós é largo.~~",
+    );
+    expect(suggest(["o rio `Tapajós é largo.` Depois choveu."], "o rio `T")).toBe(
+      "apajós é largo.`",
+    );
+  });
+
   it("never crosses a line break", () => {
     expect(suggest(["o rio Tapajós ao amanhecer\nsem pressa."], "o rio T")).toBe(
       "apajós ao amanhecer",
@@ -45,6 +60,23 @@ describe("suggest", () => {
     expect(tail.length).toBeLessThanOrEqual(MAX_SUGGESTION);
     expect(tail.length).toBeGreaterThan(MAX_SUGGESTION - 10);
     expect(note.startsWith(`o rio T${tail} `)).toBe(true);
+  });
+
+  it("caps at a tab or no-break space too, keeping the words before it", () => {
+    for (const gap of ["\t", "\u00a0"]) {
+      const steps = Array.from({ length: 30 }, (_, i) => `passo${i}`).join(gap);
+      const note = `o rio Tapajós ${steps}.`;
+      const tail = suggest([note], "o rio T") ?? "";
+      expect(tail.length).toBeLessThanOrEqual(MAX_SUGGESTION);
+      expect(tail.length).toBeGreaterThan(MAX_SUGGESTION - 10);
+      expect(note.startsWith(`o rio T${tail}${gap}`)).toBe(true);
+    }
+  });
+
+  it("offers nothing when the rest of the word alone is over the cap", () => {
+    expect(suggest([`o rio T${"a".repeat(MAX_SUGGESTION + 1)} fim.`], "o rio T")).toBeNull();
+    const fits = "a".repeat(MAX_SUGGESTION);
+    expect(suggest([`o rio T${fits} fim.`], "o rio T")).toBe(fits);
   });
 
   it("keeps the words the occurrences share when they disagree", () => {
