@@ -13,10 +13,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   also stays in the middle of the window while you type or move with the arrow
   keys. Fading and centring each have their own switch in Settings. A code
   block stays lit as a whole while the caret is in it.
-- Autocomplete plugin (on by default): while you type, the rest of the word
-  (and a few words after it, when your notes agree) appears in gray, taken from
-  the other notes in the open folder and the note itself. Tab keeps it, Esc
-  hides it. Nothing is sent over the network.
+- Autocomplete plugin (on by default): while you type, the rest of the
+  sentence appears in gray, taken from the other notes in the open folder and
+  the note itself. If the notes finish the word in different ways, it picks the
+  most common one; if the sentence then goes on differently, it offers only the
+  words they share after that word, or just the word. Tab keeps it, Esc hides
+  it. The text Tab adds flashes in a rainbow gradient for about a second and a
+  half, then turns into normal text, so you see what was added. Nothing is sent
+  over the network.
 
 ### Fixed
 - Saving a note can no longer leave it empty or half-written. The new text goes

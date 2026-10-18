@@ -1,16 +1,17 @@
+import { history, undo } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { EditorState } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
-import { afterEach, describe, expect, it } from "vitest";
-import { GHOST_CLASS, ghostText } from "./ghost";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ACCEPTED_CLASS, GHOST_CLASS, GLOW_MS, ghostText } from "./ghost";
 
 const created: EditorView[] = [];
 
-function mount(doc: string, notes: string[] = []): EditorView {
+function mount(doc: string, notes: string[] = [], extra: Extension = []): EditorView {
   const state = EditorState.create({
     doc,
     selection: { anchor: doc.length },
-    extensions: [markdown({ base: markdownLanguage }), ghostText(() => notes)],
+    extensions: [markdown({ base: markdownLanguage }), ghostText(() => notes), extra],
   });
   const view = new EditorView({ state, parent: document.body });
   created.push(view);
@@ -37,17 +38,117 @@ const press = (view: EditorView, key: string): boolean =>
 
 afterEach(() => {
   for (const v of created.splice(0)) v.destroy();
+  vi.useRealTimers();
+});
+
+/** Text of every glowing span, in document order. */
+const glowing = (view: EditorView): string[] =>
+  Array.from(view.contentDOM.querySelectorAll(`.${ACCEPTED_CLASS}`), (el) => el.textContent ?? "");
+
+/** Type `prefix`, then Tab the ghost; returns what Tab inserted. */
+function acceptAfter(view: EditorView, prefix: string): string {
+  type(view, prefix);
+  const offered = ghost(view);
+  expect(offered).toBeTruthy();
+  expect(press(view, "Tab")).toBe(true);
+  return offered as string;
+}
+
+// Only timeouts: faking requestAnimationFrame too makes the view run its
+// layout measuring, which jsdom cannot do.
+const useFakeTimeouts = () => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+describe("the glow on accepted text", () => {
+  it("wraps exactly the inserted text, not the typed prefix or what comes after", () => {
+    const view = mount("o rio Tapajós\n");
+    const inserted = acceptAfter(view, "o rio T");
+    expect(view.state.doc.toString()).toBe(`o rio Tapajós\no rio T${inserted}`);
+    expect(glowing(view)).toEqual([inserted]);
+
+    type(view, " x");
+    expect(glowing(view)).toEqual([inserted]);
+  });
+
+  it("is gone once the glow time has passed", () => {
+    useFakeTimeouts();
+    const view = mount("o rio Tapajós\n");
+    const inserted = acceptAfter(view, "o rio T");
+    vi.advanceTimersByTime(GLOW_MS - 1);
+    expect(glowing(view)).toEqual([inserted]);
+    vi.advanceTimersByTime(1);
+    expect(glowing(view)).toEqual([]);
+    expect(view.state.doc.toString()).toBe(`o rio Tapajós\no rio T${inserted}`);
+  });
+
+  it("follows the text when the document changes before it, and drops when deleted", () => {
+    const view = mount("o rio Tapajós\n");
+    const inserted = acceptAfter(view, "o rio T");
+    view.dispatch({ changes: { from: 0, insert: "Hoje vi " } });
+    expect(glowing(view)).toEqual([inserted]);
+
+    const end = view.state.doc.length;
+    view.dispatch({ changes: { from: end - inserted.length, to: end } });
+    expect(glowing(view)).toEqual([]);
+  });
+
+  it("drops when the whole phrase is selected and typed over", () => {
+    const view = mount("o rio Tapajós\n");
+    const inserted = acceptAfter(view, "o rio T");
+    const end = view.state.doc.length;
+    view.dispatch({
+      changes: { from: end - inserted.length, to: end, insert: "x" },
+      userEvent: "input.type",
+    });
+    expect(view.state.doc.toString()).toBe("o rio Tapajós\no rio Tx");
+    expect(glowing(view)).toEqual([]);
+  });
+
+  it("keeps glowing when only part of the phrase is replaced", () => {
+    const view = mount("o rio Tapajós\n");
+    const inserted = acceptAfter(view, "o rio T");
+    const end = view.state.doc.length;
+    view.dispatch({
+      changes: { from: end - 2, to: end - 1, insert: "x" },
+      userEvent: "input.type",
+    });
+    expect(glowing(view)).toEqual([`${inserted.slice(0, -2)}x${inserted.slice(-1)}`]);
+  });
+
+  it("does not appear when Tab had no ghost to accept", () => {
+    const view = mount("nada aqui\n");
+    type(view, "xyz");
+    expect(press(view, "Tab")).toBe(false);
+    expect(glowing(view)).toEqual([]);
+  });
+
+  it("adds no undo step: one undo removes the accepted text and its glow", () => {
+    const view = mount("o rio Tapajós\n", [], history());
+    acceptAfter(view, "o rio T");
+    expect(undo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("o rio Tapajós\no rio T");
+    expect(glowing(view)).toEqual([]);
+  });
+
+  it("leaves no timer behind when the editor is destroyed mid-glow", () => {
+    useFakeTimeouts();
+    const view = mount("o rio Tapajós\n");
+    acceptAfter(view, "o rio T");
+    const dispatch = vi.spyOn(view, "dispatch");
+    view.destroy();
+    vi.advanceTimersByTime(GLOW_MS * 2);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });
 
 describe("ghost text in the editor", () => {
   it("offers 'apajós' after 'o rio T' and Tab completes the document", () => {
     const view = mount("Ontem vi o rio Tapajós.\n\n");
     type(view, "o rio T");
-    expect(ghost(view)).toBe("apajós");
+    expect(ghost(view)).toBe("apajós.");
     expect(view.state.doc.toString()).toBe("Ontem vi o rio Tapajós.\n\no rio T");
 
     expect(press(view, "Tab")).toBe(true);
-    expect(view.state.doc.toString()).toBe("Ontem vi o rio Tapajós.\n\no rio Tapajós");
+    expect(view.state.doc.toString()).toBe("Ontem vi o rio Tapajós.\n\no rio Tapajós.");
     expect(view.state.selection.main.head).toBe(view.state.doc.length);
     expect(ghost(view)).toBeNull();
   });
@@ -55,7 +156,7 @@ describe("ghost text in the editor", () => {
   it("uses the other notes, not only the open one", () => {
     const view = mount("", ["Ontem vi o rio Tapajós."]);
     type(view, "o rio T");
-    expect(ghost(view)).toBe("apajós");
+    expect(ghost(view)).toBe("apajós.");
   });
 
   it("Esc hides the ghost without touching the document, until the next edit", () => {
