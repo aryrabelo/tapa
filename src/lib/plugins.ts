@@ -71,6 +71,15 @@ export const PLUGINS: readonly PluginManifest[] = [
     load: () => import("@/modules/tables").then((m) => m.tablesModule),
   },
   {
+    id: "autocomplete",
+    label: "Autocomplete",
+    blurb: "Finishes the word in gray from your other notes. Tab keeps it, Esc hides it.",
+    defaultEnabled: true,
+    editor: true,
+    eager: true,
+    load: () => import("@/modules/autocomplete").then((m) => m.autocompleteModule),
+  },
+  {
     id: "teleprompter",
     label: "Teleprompter",
     blurb: "Scrolls the note on its own, for recording a video.",

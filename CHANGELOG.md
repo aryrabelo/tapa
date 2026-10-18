@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Autocomplete plugin (on by default): while you type, the rest of the word
+  (and a few words after it, when your notes agree) appears in gray, taken from
+  the other notes in the open folder and the note itself. Tab keeps it, Esc
+  hides it. Nothing is sent over the network.
+
 ### Fixed
 - Saving a note can no longer leave it empty or half-written. The new text goes
   to a hidden temp file in the same folder, is flushed to disk, and only then
