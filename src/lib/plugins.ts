@@ -7,7 +7,8 @@ import { registry } from "@/lib/registry";
 export interface ConfigField {
   key: string;
   label: string;
-  type: "text" | "dir";
+  /** A toggle is stored as "true"/"false"; unset reads as on. */
+  type: "text" | "dir" | "toggle";
   placeholder?: string;
   help?: string;
 }
@@ -24,6 +25,11 @@ export interface PluginManifest {
   editor?: boolean;
   /** Activate as soon as the module loads. Otherwise the first command activates it. */
   eager?: boolean;
+  /**
+   * A command that turns the whole plugin on or off. Settings registers it, not
+   * the plugin: a plugin that is off is not loaded and could not switch itself on.
+   */
+  toggle?: { title: string; keybinding: string };
   config?: ConfigField[];
   load: () => Promise<Module>;
 }
@@ -78,6 +84,21 @@ export const PLUGINS: readonly PluginManifest[] = [
     editor: true,
     eager: true,
     load: () => import("@/modules/autocomplete").then((m) => m.autocompleteModule),
+  },
+  {
+    id: "focus",
+    label: "Focus",
+    blurb: "Fades everything but the sentence you are writing and keeps it in the middle.",
+    keys: "⌘⇧D",
+    defaultEnabled: false,
+    editor: true,
+    eager: true,
+    toggle: { title: "Toggle focus mode", keybinding: "mod+shift+d" },
+    config: [
+      { key: "dim", label: "Dim other sentences", type: "toggle" },
+      { key: "typewriter", label: "Keep the line centred", type: "toggle" },
+    ],
+    load: () => import("@/modules/focus").then((m) => m.focusModule),
   },
   {
     id: "teleprompter",

@@ -69,7 +69,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
   const shortcuts = [
     ...CORE_SHORTCUTS,
     ...plugins
-      .filter((p) => p.keys && isPluginEnabled(p.id))
+      // A plugin with its own toggle key works while off, so it is listed then too.
+      .filter((p) => p.keys && (p.toggle || isPluginEnabled(p.id)))
       .map((p) => ({ keys: p.keys as string, label: p.label ?? p.id })),
   ];
 
@@ -170,6 +171,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
                         {config.map((field) => {
                           const fieldId = `plugin-cfg-${id}-${field.key}`;
                           const value = cfg[`${id}::${field.key}`] ?? "";
+                          if (field.type === "toggle") {
+                            return (
+                              <div
+                                key={field.key}
+                                className="flex items-center justify-between gap-3"
+                              >
+                                <span className="text-xs font-medium text-foreground">
+                                  {field.label}
+                                </span>
+                                <Switch
+                                  checked={value !== "false"}
+                                  onChange={(next) => updateCfg(id, field.key, String(next))}
+                                  aria-label={field.label}
+                                />
+                              </div>
+                            );
+                          }
                           return (
                             <div key={field.key} className="flex flex-col gap-1">
                               <label
