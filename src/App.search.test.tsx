@@ -34,6 +34,7 @@ vi.mock("@/lib/tauri", () => ({
   takePendingOpen: vi.fn(() => Promise.resolve([])),
   pickFolder: vi.fn(() => Promise.resolve(null)),
   pickFile: vi.fn(() => Promise.resolve(null)),
+  setRecentMenu: vi.fn(() => Promise.resolve()),
   searchContent: vi.fn((_root, _q, _opts, onHit) => {
     onHitCb = onHit;
     return Promise.resolve();
@@ -42,6 +43,7 @@ vi.mock("@/lib/tauri", () => ({
 
 import { readFile, searchContent } from "@/lib/tauri";
 import { registry } from "@/lib/registry";
+import { filesModule } from "@/modules/files";
 import { bootCorePlugins } from "@/lib/plugins";
 import { useStore } from "@/state/store";
 import App from "./App";
@@ -93,9 +95,12 @@ describe("App content search (⌘⇧F)", () => {
     });
   });
 
-  it("leaves the ⌘K filename finder working", async () => {
+  it("leaves the Go to File… (⌘K) filename finder working", async () => {
+    registry.register(filesModule); // the integrator adds it to the plugin manifest
     render(<App />);
-    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    await act(async () => {
+      await registry.runCommand("palette.open");
+    });
     expect(await screen.findByPlaceholderText("Jump to file...")).toBeInTheDocument();
   });
 });

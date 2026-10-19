@@ -1,5 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { ask, open, save } from "@tauri-apps/plugin-dialog";
 
 export const scanTree = (root: string): Promise<string[]> =>
   invoke<string[]>("scan_tree", { root });
@@ -16,6 +16,19 @@ export const isDefaultMarkdownHandler = (): Promise<boolean> =>
   invoke<boolean>("is_default_markdown_handler");
 export const setDefaultMarkdownHandler = (): Promise<void> =>
   invoke<void>("set_default_markdown_handler");
+export const setRecentMenu = (paths: string[]): Promise<void> =>
+  invoke<void>("set_recent_menu", { paths });
+export const renamePath = (from: string, to: string): Promise<void> =>
+  invoke<void>("rename_path", { from, to });
+export const trashPath = (path: string): Promise<void> => invoke<void>("trash_path", { path });
+export const revealPath = (path: string): Promise<void> => invoke<void>("reveal_path", { path });
+export type PathKind = "file" | "dir" | "missing";
+export const pathKind = (path: string): Promise<PathKind> =>
+  invoke<PathKind>("path_kind", { path });
+
+/** Native yes/no warning. Resolves true when the user picks `okLabel`. */
+export const confirmAction = (message: string, title: string, okLabel: string): Promise<boolean> =>
+  ask(message, { title, kind: "warning", okLabel, cancelLabel: "Cancel" });
 
 export async function pickFolder(): Promise<string | null> {
   const sel = await open({ directory: true, multiple: false });
@@ -31,9 +44,10 @@ export async function pickFile(): Promise<string | null> {
   return typeof sel === "string" ? sel : null;
 }
 
-export async function pickSavePath(): Promise<string | null> {
+/** `defaultPath` prefills the dialog (folder and name); a bare name starts in the last folder. */
+export async function pickSavePath(defaultPath = "untitled.md"): Promise<string | null> {
   const sel = await save({
-    defaultPath: "untitled.md",
+    defaultPath,
     filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
   });
   return typeof sel === "string" ? sel : null;

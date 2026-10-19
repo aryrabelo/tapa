@@ -1,13 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 // Capture listener callbacks so tests can invoke them directly.
-let fileChangedCb: ((ev: { payload: string[] }) => unknown) | null = null;
-let openFilesCb: ((ev: { payload: string[] }) => unknown) | null = null;
+type Listener = ((ev: { payload: unknown }) => unknown) | null;
+let fileChangedCb: Listener = null;
+let openFilesCb: Listener = null;
+let menuCb: Listener = null;
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn((event: string, cb: (ev: { payload: string[] }) => unknown) => {
+  listen: vi.fn((event: string, cb: Listener) => {
     if (event === "file-changed") fileChangedCb = cb;
     if (event === "open-files") openFilesCb = cb;
+    if (event === "menu") menuCb = cb;
     return Promise.resolve(() => {});
   }),
 }));
@@ -20,6 +23,13 @@ vi.mock("@/lib/tauri", () => ({
   takePendingOpen: vi.fn(() => Promise.resolve([])),
   pickFolder: vi.fn(() => Promise.resolve(null)),
   pickFile: vi.fn(() => Promise.resolve(null)),
+  pickSavePath: vi.fn(() => Promise.resolve(null)),
+  pathKind: vi.fn(),
+  setRecentMenu: vi.fn(() => Promise.resolve()),
+  confirmAction: vi.fn(),
+  renamePath: vi.fn(),
+  revealPath: vi.fn(),
+  trashPath: vi.fn(),
 }));
 vi.mock("sonner", () => ({
   Toaster: () => null,
@@ -43,7 +53,9 @@ vi.mock("@/components/editor/Editor", () => ({
 import { listen } from "@tauri-apps/api/event";
 import {
   createPath,
+  pathKind,
   pickFolder,
+  pickSavePath,
   readFile,
   scanTree,
   takePendingOpen,
@@ -52,34 +64,38 @@ import {
 } from "@/lib/tauri";
 import { toast } from "sonner";
 import App from "./App";
+import { clearRecents, pushRecent } from "@/lib/recent";
+import { registry } from "@/lib/registry";
+import { filesModule } from "@/modules/files";
+import { autosave } from "@/modules/files/actions";
 import { useStore } from "@/state/store";
+
+// The integrator lists the module in the plugin manifest; register it here directly.
+registry.register(filesModule);
 
 beforeEach(() => {
   vi.clearAllMocks();
   fileChangedCb = null;
   openFilesCb = null;
-  localStorage.clear(); // sidebar/theme prefs persist; isolate tests
+  menuCb = null;
+  localStorage.clear(); // sidebar/theme/session prefs persist; isolate tests
+  clearRecents();
   // The store is a module singleton; reset it so tests do not leak state.
-  useStore.setState(
-    useStore.getInitialState?.() ?? {
-      root: null,
-      files: [],
-      tree: [],
-      activePath: null,
-      content: "",
-      dirty: false,
-      editOffset: null,
-    },
-  );
+  useStore.setState(useStore.getInitialState());
+});
+
+afterEach(() => {
+  autosave.cancel(); // a pending autosave must not fire into the next test
 });
 
 describe("App", () => {
   it("renders the empty state before a folder is opened", () => {
     render(<App />);
-    expect(screen.getByText(/open a folder/i)).toBeInTheDocument();
-    // One action on the empty screen. The header has no second open button.
-    expect(screen.getAllByRole("button", { name: /open my folder/i })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /open file/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/open a note, or a folder/i)).toBeInTheDocument();
+    // Two actions on the empty screen; no recent list until something was opened.
+    expect(screen.getAllByRole("button", { name: /open folder/i })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /open file/i })).toHaveLength(1);
+    expect(screen.queryByRole("navigation", { name: /recent/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /open brain/i })).not.toBeInTheDocument();
   });
 
@@ -91,12 +107,12 @@ describe("App", () => {
       new TypeError("window.__TAURI_INTERNALS__ is undefined"),
     );
     render(<App />);
-    expect(screen.getByText(/open a folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/open a note/i)).toBeInTheDocument();
     // Let the rejected listen() promise settle so its .catch runs.
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByText(/open a folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/open a note/i)).toBeInTheDocument();
   });
 
   it("disables live-reload without crashing when listen throws synchronously", () => {
@@ -104,7 +120,7 @@ describe("App", () => {
       throw new TypeError("sync listen failure");
     });
     render(<App />);
-    expect(screen.getByText(/open a folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/open a note/i)).toBeInTheDocument();
   });
 
   it("opens a folder and shows files in the sidebar", async () => {
@@ -113,11 +129,11 @@ describe("App", () => {
     vi.mocked(watchFolder).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
 
     expect(await screen.findByText("a.md")).toBeInTheDocument();
     // Once a folder is open, the header does not repeat the open actions.
-    expect(screen.queryByRole("button", { name: /open my folder/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open folder/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /open file/i })).not.toBeInTheDocument();
   });
 
@@ -128,7 +144,7 @@ describe("App", () => {
     vi.mocked(createPath).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
     expect(await screen.findByText("a.md")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /new file or folder/i }));
@@ -150,7 +166,7 @@ describe("App", () => {
     vi.mocked(createPath).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
     expect(await screen.findByText("a.md")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /new file or folder/i }));
@@ -171,7 +187,7 @@ describe("App", () => {
     vi.mocked(watchFolder).mockResolvedValue(undefined);
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /open my folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open folder/i }));
     expect(await screen.findByText("a.md")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /hide sidebar/i }));
@@ -274,6 +290,7 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => expect(fileChangedCb).toBeTypeOf("function"));
 
+    vi.mocked(readFile).mockResolvedValue("theirs");
     await act(async () => {
       await fileChangedCb?.({ payload: ["/vault/a.md"] });
     });
@@ -290,7 +307,6 @@ describe("App", () => {
 
     // Dirty buffer must be preserved, not auto-reloaded.
     expect(useStore.getState().content).toBe("edited");
-    expect(readFile).not.toHaveBeenCalled();
 
     // Clicking "Reload (discard mine)" must actually reload from disk.
     vi.mocked(readFile).mockResolvedValue("reloaded from disk");
@@ -402,5 +418,100 @@ describe("App", () => {
     });
 
     expect(useStore.getState().content).toBe("win reload");
+  });
+
+  it("ignores Tapa's own save echoing back from the watcher, even mid-typing", async () => {
+    act(() => {
+      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setActive("a.md", "orig");
+      useStore.getState().setContent("saved text");
+      useStore.getState().markSaved("saved text");
+      useStore.getState().setContent("saved text and more"); // typing after the write
+    });
+    render(<App />);
+    await waitFor(() => expect(fileChangedCb).toBeTypeOf("function"));
+
+    vi.mocked(readFile).mockResolvedValue("saved text");
+    await act(async () => {
+      await fileChangedCb?.({ payload: ["/vault/a.md"] });
+    });
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(useStore.getState().content).toBe("saved text and more");
+  });
+
+  it("File ▸ New File from the native menu asks where, writes a blank note and opens it", async () => {
+    vi.mocked(pickSavePath).mockResolvedValueOnce("/notes/new.md");
+    vi.mocked(writeFile).mockResolvedValue(undefined);
+    vi.mocked(readFile).mockResolvedValueOnce("");
+    render(<App />);
+    await waitFor(() => expect(menuCb).toBeTypeOf("function"));
+
+    await act(async () => {
+      await menuCb?.({ payload: "file.new" });
+    });
+    await waitFor(() => expect(useStore.getState().activePath).toBe("new.md"));
+    expect(writeFile).toHaveBeenCalledWith("/notes/new.md", "");
+    expect(useStore.getState().root).toBe("/notes");
+  });
+
+  it("opens a recent item from the menu; a gone one leaves the recent list", async () => {
+    act(() => {
+      pushRecent("/gone.md");
+      pushRecent("/vault");
+    });
+    vi.mocked(pathKind).mockResolvedValueOnce("missing");
+    render(<App />);
+    expect(screen.getByRole("button", { name: /gone\.md/ })).toBeInTheDocument();
+    await waitFor(() => expect(menuCb).toBeTypeOf("function"));
+
+    await act(async () => {
+      await menuCb?.({ payload: "recent:/gone.md" });
+    });
+    await waitFor(() => expect(toast.warning).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /gone\.md/ })).not.toBeInTheDocument();
+
+    // The welcome list opens a recent folder on click.
+    vi.mocked(pathKind).mockResolvedValueOnce("dir");
+    vi.mocked(scanTree).mockResolvedValueOnce(["a.md"]);
+    fireEvent.click(screen.getByRole("button", { name: /vault/ }));
+    expect(await screen.findByText("a.md")).toBeInTheDocument();
+  });
+
+  it("reopens the last folder and note on launch, and skips a missing one quietly", async () => {
+    localStorage.setItem(
+      "tapa-session",
+      JSON.stringify({ root: "/vault", single: false, note: "b.md" }),
+    );
+    vi.mocked(scanTree).mockResolvedValueOnce(["a.md", "b.md"]);
+    vi.mocked(readFile).mockResolvedValueOnce("bee");
+    const { unmount } = render(<App />);
+    await waitFor(() => expect(useStore.getState().activePath).toBe("b.md"));
+    expect(useStore.getState()).toMatchObject({ root: "/vault", content: "bee" });
+    unmount();
+
+    useStore.setState(useStore.getInitialState());
+    vi.mocked(scanTree).mockRejectedValueOnce("No such folder");
+    render(<App />);
+    await waitFor(() => expect(scanTree).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useStore.getState().root).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("Close Note saves first and keeps the folder open", async () => {
+    vi.mocked(writeFile).mockResolvedValue(undefined);
+    act(() => {
+      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setActive("a.md", "hello");
+      useStore.getState().setContent("hello edited");
+    });
+    render(<App />);
+    await act(async () => {
+      await registry.runCommand("file.close");
+    });
+    expect(writeFile).toHaveBeenCalledWith("/vault/a.md", "hello edited");
+    expect(useStore.getState()).toMatchObject({ activePath: null, root: "/vault" });
   });
 });

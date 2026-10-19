@@ -5,8 +5,9 @@ import { toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
 
 // Reacts to the Rust `file-changed` event (recursive over the vault root):
-//   - reloads the active file when it changes on disk (silently if clean, with a
-//     keep/reload prompt if there are unsaved edits);
+//   - reloads the active file when its disk content really changed (silently
+//     if clean, with a keep/reload prompt if there are unsaved edits); Tapa's
+//     own saves (autosave included) leave the disk equal to `savedContent`;
 //   - re-scans the sidebar tree on any add/remove/change beyond the active file;
 //   - honours an agent->UI `focus` signal written to `<root>/.tapa/control.json`.
 // Defensive against a missing Tauri runtime (plain-browser QA).
@@ -25,6 +26,29 @@ export function useFileWatcher(): void {
         useStore.getState().setActive(activePath, c);
       } catch (e) {
         toast.error(String(e));
+      }
+    };
+
+    // The active file changed on disk. Unchanged content (our own write) is a no-op.
+    const onActiveChanged = async () => {
+      const { root, activePath } = useStore.getState();
+      if (!root || !activePath) return;
+      let disk: string;
+      try {
+        disk = await readFile(`${root}/${activePath}`);
+      } catch {
+        return; // Gone (renamed or trashed): the tree rescan reflects it.
+      }
+      const s = useStore.getState();
+      if (s.activePath !== activePath || disk === s.savedContent) return;
+      if (s.dirty) {
+        toast.warning("This file changed on disk.", {
+          description: "You have unsaved edits.",
+          action: { label: "Reload (discard mine)", onClick: () => void reload() },
+          cancel: { label: "Keep mine", onClick: () => undefined },
+        });
+      } else {
+        s.setActive(activePath, disk);
       }
     };
 
@@ -82,17 +106,7 @@ export function useFileWatcher(): void {
           return;
         }
 
-        if (matchesActive(paths)) {
-          if (useStore.getState().dirty) {
-            toast.warning("This file changed on disk.", {
-              description: "You have unsaved edits.",
-              action: { label: "Reload (discard mine)", onClick: () => void reload() },
-              cancel: { label: "Keep mine", onClick: () => undefined },
-            });
-          } else {
-            void reload();
-          }
-        }
+        if (matchesActive(paths)) void onActiveChanged();
 
         if (touchesTree(paths)) void rescanTree();
       })

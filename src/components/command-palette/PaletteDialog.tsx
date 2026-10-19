@@ -1,5 +1,6 @@
 import type * as React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { focusField, refocusEditor } from "@/lib/editor-view";
 import {
   Command,
   CommandDialog,
@@ -35,6 +36,15 @@ export function PaletteDialog({
   const [q, setQ] = useState("");
   const abs = q.length > 0 && isAbsolutePath(q);
   const ranked = q ? fuzzyRank(q, files) : files;
+
+  // The finder is a plain overlay with no focus management, so typing would go
+  // into the note behind it. Take the keyboard when it opens, and hand it back
+  // to the note when it closes.
+  useEffect(() => {
+    if (!open) return;
+    focusField(document.querySelector<HTMLInputElement>("[cmdk-input]"));
+    return refocusEditor;
+  }, [open]);
 
   return (
     <CommandDialog

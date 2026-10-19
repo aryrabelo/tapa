@@ -3,17 +3,20 @@ import { listen } from "@tauri-apps/api/event";
 import { takePendingOpen } from "@/lib/tauri";
 
 // Opens files handed over by the OS (file association / `open file.md`): drains
-// the buffer captured before mount, then listens for opens while running.
+// the buffer captured before mount, then listens for opens while running. A
+// launch without a file hands over to `onPlainLaunch` (session restore).
 // Defensive against a missing Tauri runtime (plain-browser QA).
-export function useOsOpen(openFileByPath: (file: string) => Promise<void>): void {
+export function useOsOpen(
+  openFileByPath: (file: string) => Promise<unknown>,
+  onPlainLaunch: () => Promise<void>,
+): void {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
 
     void takePendingOpen()
-      .then((paths) => {
-        if (paths[0]) void openFileByPath(paths[0]);
-      })
+      .catch(() => [])
+      .then((paths) => (paths[0] ? openFileByPath(paths[0]) : onPlainLaunch()))
       .catch(() => {});
 
     try {
@@ -33,5 +36,5 @@ export function useOsOpen(openFileByPath: (file: string) => Promise<void>): void
       cancelled = true;
       unlisten?.();
     };
-  }, [openFileByPath]);
+  }, [openFileByPath, onPlainLaunch]);
 }

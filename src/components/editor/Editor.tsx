@@ -78,6 +78,13 @@ export function Editor({ doc, cursor, onChange, onSave, onBlurSave }: Props): Re
       view.current = created;
       attachEditorView(created);
       created.focus();
+      // WebKit can drop the focus if the element that had it (e.g. the file
+      // finder's input) is removed around now. Ask again after the current
+      // task (not on an animation frame: WKWebView pauses those while the
+      // window is covered) so the note that just opened takes the keyboard.
+      setTimeout(() => {
+        if (!cancelled && created && !created.hasFocus) created.focus();
+      }, 0);
       const pending = useStore.getState().scrollLine;
       if (pending != null) scrollToLine(created, pending);
     })();

@@ -35,6 +35,8 @@ export interface PluginManifest {
 }
 
 export const PLUGINS: readonly PluginManifest[] = [
+  { id: "zoom", eager: true, load: () => import("@/modules/zoom").then((m) => m.zoomModule) },
+  { id: "files", eager: true, load: () => import("@/modules/files").then((m) => m.filesModule) },
   {
     id: "search",
     load: () => import("@/modules/search").then((m) => m.searchModule),

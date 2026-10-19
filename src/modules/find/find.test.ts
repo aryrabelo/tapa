@@ -12,10 +12,16 @@ describe("findMatches", () => {
     ]);
   });
 
-  it("is case-insensitive", () => {
+  it("is case-insensitive by default", () => {
     expect(findMatches("Fox FOX fox", "fox")).toEqual([
       { start: 0, end: 3 },
       { start: 4, end: 7 },
+      { start: 8, end: 11 },
+    ]);
+  });
+
+  it("matches exact case when caseSensitive is on", () => {
+    expect(findMatches("Fox FOX fox", "fox", { caseSensitive: true })).toEqual([
       { start: 8, end: 11 },
     ]);
   });

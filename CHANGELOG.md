@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- A full menu bar. **File:** New File, Open… (`⌘O`), Open Folder… (`⌘⇧O`),
+  Open Recent, Save, Save As… (`⌘⇧S`), Rename…, Show in Finder, Move to
+  Trash, Close Note (`⌘W`) and Close Window (`⌘⇧W`). **Edit:** Find, Find and
+  Replace (`⌘⌥F`), Search in Files. **View:** sidebar, Go to File (`⌘K`),
+  bigger and smaller text (`⌘=`, `⌘-`, `⌘0`), Focus Mode. **Help:** Keyboard
+  Shortcuts and the project page. Settings… and Check for Updates… are in the
+  Tapa menu.
+- The full path of the open note is shown at the top (home as `~`); click it
+  to copy it. The window title shows the note and its folder, with "Edited"
+  while there are unsaved changes.
+- Tapa reopens the last folder and note when it starts. The start screen has
+  Open File…, Open Folder… and your recent files and folders.
+- Notes save on their own a moment after you stop typing, before switching
+  to another note, and before the window closes.
+- Drag a Markdown file or a folder onto the window to open it.
+- Find and Replace, with Replace All as one undo step and a Match case option.
+- Text size from 80% to 200%, remembered between launches.
+- Tapa checks for updates once a day and only says something when there is one.
+
+### Fixed
+- Opening the file finder, the find bar or the rename box now puts the
+  keyboard in it. Before, what you typed could go into the note behind it.
+- Closing one of them gives the keyboard back to the note, so typing and
+  shortcuts such as `⌘W` keep working without a click.
+
 ## [0.5.0] - 2026-10-18
 
 ### Added
