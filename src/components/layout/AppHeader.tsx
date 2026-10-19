@@ -9,7 +9,9 @@ import { useStore } from "@/state/store";
 // Top bar: sidebar toggle, where the open note lives, save status, Settings.
 export function AppHeader(): React.ReactElement {
   const s = useStore();
-  const notePath = s.root && s.activePath ? `${s.root}/${s.activePath}` : null;
+  // Strip the root's trailing separator so a note in "/" reads "/a.md", not "//a.md".
+  const notePath =
+    s.root && s.activePath ? `${s.root.replace(/[\\/]+$/, "")}/${s.activePath}` : null;
   let status: string | null = null;
   if (s.activePath) {
     if (s.saving || (s.dirty && !s.saveFailed)) status = "Saving…";

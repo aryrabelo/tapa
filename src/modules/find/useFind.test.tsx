@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { registry } from "@/lib/registry";
 import { findModule } from "@/modules/find";
@@ -58,6 +58,34 @@ describe("useFind", () => {
     await registry.runCommand("find.open");
     render(<FindBar />);
 
+    expect(screen.getByPlaceholderText("Find in file")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Replace with")).toBeNull();
+  });
+
+  // Regression: with the bar already open, ⌘F / ⌘⌥F changed nothing the bar
+  // watched, so after clicking back into the note the keys kept typing there.
+  it("⌘F and ⌘⌥F take the keyboard back while the bar is already open", async () => {
+    useStore.getState().setActive("x.md", "fox");
+    const note = document.createElement("div");
+    note.contentEditable = "true";
+    note.tabIndex = 0;
+    document.body.append(note);
+
+    await registry.runCommand("find.replace");
+    render(<FindBar />);
+    const findField = screen.getByPlaceholderText("Find in file");
+    fireEvent.input(findField, { target: { value: "fox" } });
+
+    note.focus();
+    await registry.runCommand("find.replace");
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByPlaceholderText("Replace with")),
+    );
+
+    await registry.runCommand("find.open");
+    note.focus();
+    await registry.runCommand("find.open");
+    await vi.waitFor(() => expect(document.activeElement).toBe(findField));
+    note.remove();
   });
 });

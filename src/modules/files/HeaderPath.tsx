@@ -30,8 +30,9 @@ export function useHome(): string | null {
 
 /**
  * Full path of the open note: folder muted, name strong. When space runs out
- * the folder loses its start (rtl ellipsis on the left), the name never
- * shrinks. Click copies the full path.
+ * the folder loses its start first (rtl ellipsis on the left); only a name
+ * wider than the whole button is cut, with an ellipsis at its end. Click
+ * copies the full path.
  */
 export function HeaderPath({ path }: { path: string }): React.ReactElement {
   const { dir, name } = splitPath(shortenHome(path, useHome()));
@@ -52,7 +53,7 @@ export function HeaderPath({ path }: { path: string }): React.ReactElement {
       <span dir="rtl" className="min-w-0 truncate text-left text-muted-foreground">
         {`\u200E${dir}\u200E`}
       </span>
-      <span className="shrink-0 font-medium text-foreground">{name}</span>
+      <span className="max-w-full shrink-0 truncate font-medium text-foreground">{name}</span>
     </button>
   );
 }

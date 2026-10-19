@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createRegistry } from "@/lib/registry";
-import { getZoom, zoomModule } from "@/modules/zoom";
+import { applyZoom, getZoom } from "@/lib/zoom";
+import { zoomModule } from "@/modules/zoom";
 
 const cssZoom = () => document.documentElement.style.getPropertyValue("--text-zoom");
 
@@ -16,9 +17,10 @@ describe("zoom", () => {
     document.documentElement.style.removeProperty("--text-zoom");
   });
 
-  it("applies the saved size to :root when the module loads", () => {
+  // What main.tsx runs before the first render.
+  it("applies the saved size to :root at startup", () => {
     localStorage.setItem("tapa-text-zoom", "130");
-    boot();
+    applyZoom(getZoom());
     expect(cssZoom()).toBe("1.3");
   });
 
@@ -53,7 +55,7 @@ describe("zoom", () => {
     await boot().runCommand("view.zoomIn");
     expect(localStorage.getItem("tapa-text-zoom")).toBe("110");
     document.documentElement.style.removeProperty("--text-zoom");
-    boot(); // next launch
+    applyZoom(getZoom()); // next launch
     expect(cssZoom()).toBe("1.1");
   });
 });

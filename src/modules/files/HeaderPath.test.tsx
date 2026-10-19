@@ -16,7 +16,7 @@ describe("HeaderPath", () => {
     const folder = await screen.findByText((t) => t.includes("~/notes/deep/"));
     expect(folder).toHaveAttribute("dir", "rtl");
     expect(folder).toHaveClass("truncate", "min-w-0");
-    expect(screen.getByText("a.md")).toHaveClass("shrink-0");
+    expect(screen.getByText("a.md")).toHaveClass("shrink-0", "max-w-full", "truncate");
 
     fireEvent.click(screen.getByRole("button"));
     expect(writeText).toHaveBeenCalledWith("/Users/ary/notes/deep/a.md");

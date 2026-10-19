@@ -58,6 +58,11 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 [target.'cfg(all(not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
 trash = "5"
 
+# Atomic no-replace rename (renamex_np / renameat2). Already in the tree via
+# tauri, so this adds no crate.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [features]
 default = []
 dev-capture = ["dep:reqwest", "dep:rustls", "dep:dotenvy"]

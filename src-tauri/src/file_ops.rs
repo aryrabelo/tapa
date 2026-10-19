@@ -3,6 +3,7 @@
 //! Open Recent. Errors are short plain-English strings the UI can show as-is.
 
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// `"file"`, `"dir"` or `"missing"` (symlinks are followed).
@@ -57,26 +58,148 @@ fn rename(from: &Path, to: &Path) -> Result<(), String> {
     if fs::symlink_metadata(from).is_err() {
         return Err(gone(from));
     }
-    // On case-insensitive disks (macOS/Windows default) `to` "exists" when only
-    // the letter case changes; that is the same item, so let it through.
-    if fs::symlink_metadata(to).is_ok() && !same_entry(from, to) {
-        return Err(format!("There is already an item named \"{}\".", name(to)));
+    if from == to {
+        return Ok(());
     }
-    fs::rename(from, to).map_err(|e| format!("Could not rename \"{}\": {e}", name(from)))
+    let failed = |e: io::Error| format!("Could not rename \"{}\": {e}", name(from));
+    match rename_no_replace(from, to) {
+        Ok(()) => Ok(()),
+        // On case-insensitive disks `to` already "exists" when only the letter
+        // case changes. If it is `from`'s own entry, a plain rename is safe.
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists && is_alias(from, to) => {
+            fs::rename(from, to).map_err(failed)
+        }
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+            Err(format!("There is already an item named \"{}\".", name(to)))
+        }
+        Err(e) => Err(failed(e)),
+    }
 }
 
+/// Rename that fails with `AlreadyExists` instead of replacing `to`, decided by
+/// the OS in one step so nothing created meanwhile can be overwritten.
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
+    let (f, t) = (c_path(from)?, c_path(to)?);
+    // SAFETY: both are valid NUL-terminated strings that outlive the call.
+    if unsafe { libc::renamex_np(f.as_ptr(), t.as_ptr(), libc::RENAME_EXCL) } == 0 {
+        return Ok(());
+    }
+    let err = io::Error::last_os_error();
+    match err.raw_os_error() {
+        // The disk (some network/FAT volumes) has no exclusive rename.
+        Some(libc::ENOTSUP) => checked_rename(from, to),
+        _ => Err(err),
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
+    let (f, t) = (c_path(from)?, c_path(to)?);
+    // Raw syscall: the glibc wrapper is newer than some supported distros.
+    // SAFETY: both are valid NUL-terminated strings that outlive the call.
+    let done = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            f.as_ptr(),
+            libc::AT_FDCWD,
+            t.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if done == 0 {
+        return Ok(());
+    }
+    let err = io::Error::last_os_error();
+    match err.raw_os_error() {
+        // Kernel older than 3.15, or a filesystem without RENAME_NOREPLACE.
+        Some(libc::ENOSYS | libc::EINVAL) => checked_rename(from, to),
+        _ => Err(err),
+    }
+}
+
+/// `std::fs::rename` passes MOVEFILE_REPLACE_EXISTING; without it Windows
+/// refuses an existing target but still allows a case-only rename.
+#[cfg(windows)]
+fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
+    }
+    let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain([0]).collect() };
+    let (f, t) = (wide(from), wide(to));
+    // SAFETY: both are valid NUL-terminated UTF-16 strings that outlive the call.
+    if unsafe { MoveFileExW(f.as_ptr(), t.as_ptr(), 0) } != 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "linux",
+    target_os = "android",
+    windows
+)))]
+fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
+    checked_rename(from, to)
+}
+
+/// Fallback when the OS has no atomic no-replace rename: check, then rename.
+/// Something created at `to` between the two steps would be replaced.
+#[cfg(not(windows))]
+fn checked_rename(from: &Path, to: &Path) -> io::Result<()> {
+    if fs::symlink_metadata(to).is_ok() {
+        return Err(io::ErrorKind::AlreadyExists.into());
+    }
+    fs::rename(from, to)
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "linux",
+    target_os = "android"
+))]
+fn c_path(path: &Path) -> io::Result<std::ffi::CString> {
+    use std::os::unix::ffi::OsStrExt;
+    std::ffi::CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"))
+}
+
+/// True when `to` is only another spelling (letter case, Unicode form) of
+/// `from`'s own entry on a case-insensitive disk. A hard link, or any entry
+/// stored under exactly `to`'s name, is a different item.
 #[cfg(unix)]
-fn same_entry(a: &Path, b: &Path) -> bool {
+fn is_alias(from: &Path, to: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
-    match (fs::symlink_metadata(a), fs::symlink_metadata(b)) {
+    let same_inode = match (fs::symlink_metadata(from), fs::symlink_metadata(to)) {
         (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
         _ => false,
-    }
+    };
+    let Some(want) = to.file_name() else {
+        return false;
+    };
+    let dir = to
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let stored_as_named = match fs::read_dir(dir) {
+        Ok(entries) => entries.flatten().any(|e| e.file_name() == want),
+        Err(_) => true,
+    };
+    same_inode && !stored_as_named
 }
 
+/// Windows needs no alias check: MoveFileExW already renames a file to a
+/// different letter case of its own name.
 #[cfg(not(unix))]
-fn same_entry(a: &Path, b: &Path) -> bool {
-    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+fn is_alias(_from: &Path, _to: &Path) -> bool {
+    false
 }
 
 /// Returns where the item landed when the OS reports it (macOS only).
@@ -202,6 +325,34 @@ mod tests {
         assert_eq!(fs::read_to_string(&to).unwrap(), "theirs");
     }
 
+    // The OS step itself must refuse, so a file created after any check is
+    // still never replaced.
+    #[test]
+    fn os_rename_step_never_replaces() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("a.md"), dir.path().join("b.md"));
+        fs::write(&from, "mine").unwrap();
+        fs::write(&to, "theirs").unwrap();
+        let err = rename_no_replace(&from, &to).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&from).unwrap(), "mine");
+        assert_eq!(fs::read_to_string(&to).unwrap(), "theirs");
+    }
+
+    // Two names for one file are two items: renaming onto the other name must
+    // fail loudly instead of silently leaving the old name in place.
+    #[test]
+    fn rename_onto_a_hard_link_of_itself_is_a_collision() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("a.md"), dir.path().join("b.md"));
+        fs::write(&from, "same").unwrap();
+        fs::hard_link(&from, &to).unwrap();
+        let err = rename(&from, &to).unwrap_err();
+        assert!(err.contains("already an item named \"b.md\""), "{err}");
+        assert!(from.exists());
+        assert!(to.exists());
+    }
+
     #[test]
     fn rename_refuses_to_overwrite_a_folder() {
         let dir = tempfile::tempdir().unwrap();
@@ -242,6 +393,26 @@ mod tests {
             .map(|e| e.unwrap().file_name().into_string().unwrap())
             .collect();
         assert_eq!(names, ["Note.md"]);
+    }
+
+    // Disks where the OS step reports a case-only rename as a collision
+    // (Linux casefold folders, fallback path) rely on this check.
+    #[cfg(unix)]
+    #[test]
+    fn other_letter_case_is_the_same_item_but_a_hard_link_is_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let (note, upper, link) = (
+            dir.path().join("note.md"),
+            dir.path().join("Note.md"),
+            dir.path().join("link.md"),
+        );
+        fs::write(&note, "x").unwrap();
+        fs::hard_link(&note, &link).unwrap();
+        assert!(!is_alias(&note, &link));
+        // Only meaningful where the temp folder ignores letter case (macOS).
+        if upper.exists() {
+            assert!(is_alias(&note, &upper));
+        }
     }
 
     #[test]

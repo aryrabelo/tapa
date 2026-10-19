@@ -35,8 +35,9 @@ describe("recent list", () => {
       "/notes/a.md",
     ]);
     removeRecent("/notes/a.md");
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(vi.mocked(setRecentMenu).mock.calls.at(-1)).toEqual([["/vault"]]);
+    // Wait for the menu sync itself, not a guessed number of microtasks.
+    await vi.waitFor(() =>
+      expect(vi.mocked(setRecentMenu).mock.calls.at(-1)).toEqual([["/vault"]]),
+    );
   });
 });

@@ -23,8 +23,9 @@ export function windowTitle(
   dirty: boolean,
 ): string {
   if (!root) return "Tapa";
-  if (!activePath) return splitPath(root.replace(/[\\/]+$/, "")).name || root;
-  const { dir, name } = splitPath(`${root}/${activePath}`);
+  const base = root.replace(/[\\/]+$/, "");
+  if (!activePath) return splitPath(base).name || root;
+  const { dir, name } = splitPath(`${base}/${activePath}`);
   const parent = splitPath(dir.replace(/[\\/]+$/, "")).name || dir;
   return `${name} — ${parent}${dirty ? " — Edited" : ""}`;
 }

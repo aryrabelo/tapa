@@ -16,17 +16,18 @@ export function FindBar(): React.ReactElement {
 // state lives in useFind; this only renders and reports intent, so it is
 // testable without an editor.
 export function FindBarView(find: FindController): React.ReactElement {
-  const { query, count, current, replaceOpen, replaced } = find;
+  const { query, count, current, replaceOpen, focusRequest, replaced } = find;
   const box = useRef<HTMLDivElement>(null);
 
   // `autoFocus` only works at page load under preact/compat, so the bar would
   // open with the keyboard still in the note. Focus by hand: the find field,
-  // or the replacement once Replace opens on an existing query.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refocus only when the bar opens or Replace toggles, not on every keystroke.
+  // or the replacement once Replace opens on an existing query. ⌘F / ⌘⌥F bump
+  // `focusRequest`, so they take the keyboard back even when the bar is open.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refocus only when the bar opens, Replace toggles, or ⌘F asks again, not on every keystroke.
   useEffect(() => {
     const fields = box.current?.querySelectorAll("input");
     focusField(replaceOpen && query !== "" ? fields?.[1] : fields?.[0], true);
-  }, [replaceOpen]);
+  }, [replaceOpen, focusRequest]);
 
   // Closing the bar (Esc or ×) hands the keyboard back to the note.
   useEffect(() => refocusEditor, []);

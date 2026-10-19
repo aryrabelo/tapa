@@ -13,6 +13,19 @@ use tauri::{AppHandle, Emitter, Manager, Wry};
 /// Handled in Rust, never emitted: closing goes through the window's normal
 /// close request so the frontend's `onCloseRequested` still runs.
 const CLOSE_WINDOW: &str = "native:close-window";
+/// Handled in Rust: Quit closes every window through the same close request,
+/// so the frontend saves first. The predefined Quit item exits without asking.
+const QUIT: &str = "native:quit";
+#[cfg(target_os = "macos")]
+const QUIT_LABEL: &str = "Quit Tapa";
+#[cfg(windows)]
+const QUIT_LABEL: &str = "Exit";
+#[cfg(not(any(target_os = "macos", windows)))]
+const QUIT_LABEL: &str = "Quit";
+#[cfg(windows)]
+const QUIT_ACCEL: Option<&str> = None;
+#[cfg(not(windows))]
+const QUIT_ACCEL: Option<&str> = Some("CmdOrCtrl+Q");
 /// Windows/Linux only (macOS uses the predefined Enter Full Screen item).
 #[cfg(not(target_os = "macos"))]
 const FULLSCREEN: &str = "native:fullscreen";
@@ -56,6 +69,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     )?;
     let check_updates = item("app.checkForUpdates", "Check for Updates…", None)?;
     let settings = item("settings.open", SETTINGS_LABEL, Some("CmdOrCtrl+,"))?;
+    let quit = item(QUIT, QUIT_LABEL, QUIT_ACCEL)?;
 
     let recent = SubmenuBuilder::with_id(app, "file.openRecent", "Open Recent").build()?;
     fill_recent(&recent, &[])?;
@@ -73,7 +87,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         .hide_others()
         .show_all()
         .separator()
-        .quit()
+        .item(&quit)
         .build()?;
 
     let file = SubmenuBuilder::new(app, "File")
@@ -100,9 +114,9 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         )?);
     // Windows convention: Settings and Exit live at the bottom of File.
     #[cfg(windows)]
-    let file = file.separator().item(&settings).separator().quit();
+    let file = file.separator().item(&settings).separator().item(&quit);
     #[cfg(not(any(target_os = "macos", windows)))]
-    let file = file.separator().quit();
+    let file = file.separator().item(&quit);
     let file = file.build()?;
 
     let edit = SubmenuBuilder::new(app, "Edit")
@@ -202,6 +216,12 @@ pub fn on_event(app: &AppHandle, id: &str) {
     match id {
         CLOSE_WINDOW => {
             if let Some(win) = focused_window(app) {
+                let _ = win.close();
+            }
+        }
+        QUIT => {
+            // Each window saves on its close request; the app exits once all are closed.
+            for win in app.webview_windows().values() {
                 let _ = win.close();
             }
         }

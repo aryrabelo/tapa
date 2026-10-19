@@ -17,6 +17,7 @@ function renderProps(overrides: Partial<FindController> = {}): FindController {
     prev: vi.fn(),
     close: vi.fn(),
     replaceOpen: false,
+    focusRequest: 0,
     toggleReplace: vi.fn(),
     replacement: "",
     setReplacement: vi.fn(),

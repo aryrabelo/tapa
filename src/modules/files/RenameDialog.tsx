@@ -10,12 +10,21 @@ import { splitPath } from "./path";
 // A plain modal, not the Radix Dialog: under preact/compat Radix's Presence
 // throws on mount here and the box never appears.
 export function RenameDialog(): React.ReactElement {
-  const current = splitPath(useStore.getState().activePath ?? "").name;
+  const activePath = useStore((s) => s.activePath);
+  // The note this box was opened for; renameNote renames whatever is active.
+  const [openedFor] = useState(activePath);
+  const current = splitPath(openedFor ?? "").name;
   const [name, setName] = useState(current);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const close = () => useStore.getState().setRenameOpen(false);
+
+  // Another note opened (or this one closed) while the box is up: close it,
+  // so Rename never applies the old name to a different note.
+  useEffect(() => {
+    if (activePath !== openedFor) useStore.getState().setRenameOpen(false);
+  }, [activePath, openedFor]);
 
   // Select the name without its extension, like Finder, so the note's editor
   // cannot keep the keyboard.
@@ -34,11 +43,24 @@ export function RenameDialog(): React.ReactElement {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (useStore.getState().activePath !== openedFor) return close();
     setBusy(true);
     const err = await renameNote(name);
     setBusy(false);
     if (err) setError(err);
     else close();
+  }
+
+  // Keep Tab inside the box (input → Cancel → Rename → input), so the
+  // keyboard cannot wander into the sidebar or the note behind it.
+  function trapTab(e: React.KeyboardEvent<HTMLFormElement>) {
+    const items = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>("input, button:not(:disabled)"),
+    );
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next = e.shiftKey ? (at <= 0 ? items.length - 1 : at - 1) : (at + 1) % items.length;
+    e.preventDefault();
+    items[next]?.focus();
   }
 
   return (
@@ -57,6 +79,8 @@ export function RenameDialog(): React.ReactElement {
           if (e.key === "Escape") {
             e.preventDefault();
             close();
+          } else if (e.key === "Tab") {
+            trapTab(e);
           }
         }}
         className="grid w-full max-w-sm gap-3 rounded-xl bg-popover p-4 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/10"

@@ -81,6 +81,7 @@ version = "0.5.0"
 dependencies = [
  "core-foundation",
  "dotenvy",
+ "libc",
  "log",
  "memchr",
  "notify",

@@ -28,4 +28,9 @@ describe("windowTitle", () => {
     expect(windowTitle("/vault/", null, false)).toBe("vault");
     expect(windowTitle(null, null, false)).toBe("Tapa");
   });
+
+  it("shows a note at the top of the disk as in /", () => {
+    expect(windowTitle("/", "a.md", false)).toBe("a.md — /");
+    expect(windowTitle("/", null, false)).toBe("/");
+  });
 });

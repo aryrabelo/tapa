@@ -14,13 +14,14 @@ import { syncRecentMenu } from "@/lib/recent";
 import { bootCorePlugins } from "@/lib/plugins";
 import { ContextMenu } from "@/components/ContextMenu";
 import {
-  autosave,
   installAutosave,
+  leaveNote,
   newFile,
   openFile,
   openNote,
   openPath,
   rememberSession,
+  rescan,
   restoreSession,
   save,
 } from "@/modules/files/actions";
@@ -59,21 +60,30 @@ const RenameDialog = lazy(() =>
 
 // Sidebar "+": create a new file or directory relative to the open folder
 // (no native Save dialog). An empty directory appears once it holds a note.
+// The mode stays: a single-file session moves to the new file.
 async function createEntry(rel: string, dir: boolean): Promise<void> {
-  const { root } = useStore.getState();
+  const { root, single } = useStore.getState();
   if (!root || !rel) return;
-  if (!dir && !(await autosave.flush())) return;
+  const abs = `${root}/${rel}`;
   try {
-    await createPath(`${root}/${rel}`, dir);
-    useStore.getState().setFolder(root, await scanTree(root));
+    if (dir) {
+      await createPath(abs, true);
+      await rescan(root);
+      toast.success("Folder created — it appears once it has a note.");
+      return;
+    }
+    await leaveNote(
+      async () => {
+        await createPath(abs, false);
+        return single ? [rel] : scanTree(root);
+      },
+      (files) => {
+        useStore.getState().setFolder(root, files, single);
+        useStore.getState().setActive(rel, "");
+      },
+    );
   } catch (e) {
     toast.error(String(e));
-    return;
-  }
-  if (dir) {
-    toast.success("Folder created — it appears once it has a note.");
-  } else {
-    useStore.getState().setActive(rel, "");
   }
 }
 

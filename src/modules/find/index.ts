@@ -1,5 +1,5 @@
 import type { Module } from "@/lib/registry";
-import { setReplaceOpen } from "./mode";
+import { requestFind } from "./mode";
 
 // In-document find (⌘F) and find-and-replace (⌘⌥F): searches the open note
 // and selects each match in the editor. App renders the FindBar by
@@ -12,7 +12,7 @@ export const findModule: Module = {
       title: "Find in file",
       run: (ctx) => {
         if (!ctx.getState().activePath) return;
-        setReplaceOpen(false);
+        requestFind(false);
         ctx.showPanel("find");
       },
     });
@@ -22,7 +22,7 @@ export const findModule: Module = {
       title: "Find and replace",
       run: (ctx) => {
         if (!ctx.getState().activePath) return;
-        setReplaceOpen(true);
+        requestFind(true);
         ctx.showPanel("find");
       },
     });

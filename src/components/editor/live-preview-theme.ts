@@ -15,7 +15,7 @@ import { EditorView } from "@codemirror/view";
  *
  * It references only the app CSS vars: --foreground, --muted-foreground,
  * --muted, --ring, --border, --link, and --text-zoom (the View menu's text
- * size, set by the zoom module). Editor.tsx no longer carries its own
+ * size, set by src/lib/zoom.ts). Editor.tsx no longer carries its own
  * theme block — this extension is the single source of editor styling.
  */
 

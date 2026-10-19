@@ -4,7 +4,7 @@ import { getEditorView } from "@/lib/editor-view";
 import { registry, useActivePanel } from "@/lib/registry";
 import { useStore } from "@/state/store";
 import { findMatches } from "./find";
-import { getReplaceOpen, setReplaceOpen, subscribeReplaceOpen } from "./mode";
+import { getFocusRequest, getReplaceOpen, setReplaceOpen, subscribeFindMode } from "./mode";
 import { type ReplaceTarget, replaceAll, replaceOne } from "./replace";
 
 export interface FindController {
@@ -18,6 +18,8 @@ export interface FindController {
   prev: () => void;
   close: () => void;
   replaceOpen: boolean;
+  /** Bumped by every ⌘F / ⌘⌥F, so the bar takes the keyboard even when already open. */
+  focusRequest: number;
   toggleReplace: () => void;
   replacement: string;
   setReplacement: (r: string) => void;
@@ -56,7 +58,8 @@ export function useFind(): FindController {
   const [count, setCount] = useState(0);
   const content = useStore((s) => s.content);
   const active = useActivePanel() === "find";
-  const replaceOpen = useSyncExternalStore(subscribeReplaceOpen, getReplaceOpen);
+  const replaceOpen = useSyncExternalStore(subscribeFindMode, getReplaceOpen);
+  const focusRequest = useSyncExternalStore(subscribeFindMode, getFocusRequest);
 
   useEffect(() => {
     if (!active || !query) {
@@ -107,6 +110,7 @@ export function useFind(): FindController {
       setCurrent(-1);
     },
     replaceOpen,
+    focusRequest,
     toggleReplace: () => setReplaceOpen(!replaceOpen),
     replacement,
     setReplacement,

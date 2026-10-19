@@ -31,7 +31,8 @@ export function syncWindowTitle(): () => void {
 
 /**
  * Saves the note before the window closes. If the save fails the window stays
- * open unless the user agrees to lose the edits.
+ * open unless the user agrees to lose the edits. Quit (⌘Q, File ▸ Exit) closes
+ * the windows the same way (src-tauri/src/menu.rs), so it is guarded too.
  */
 export function guardWindowClose(): () => void {
   let off: (() => void) | undefined;

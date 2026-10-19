@@ -200,7 +200,7 @@ describe("App", () => {
   it("autosaves silently on blur only when dirty, and stays on the note", async () => {
     vi.mocked(writeFile).mockResolvedValue(undefined);
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "hello");
     });
 
@@ -265,7 +265,7 @@ describe("App", () => {
     vi.mocked(writeFile).mockRejectedValue(new Error("disk full"));
 
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "hello");
       useStore.getState().setContent("hello edited");
     });
@@ -282,7 +282,7 @@ describe("App", () => {
 
   it("warns and offers keep/reload when the active file changes on disk while dirty", async () => {
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "orig");
       useStore.getState().setContent("edited"); // dirty = true
     });
@@ -321,7 +321,7 @@ describe("App", () => {
   it("reloads automatically when the active file changes on disk and there are no unsaved edits", async () => {
     vi.mocked(readFile).mockResolvedValue("reloaded from disk");
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "orig"); // dirty = false
     });
 
@@ -349,7 +349,7 @@ describe("App", () => {
     vi.mocked(readFile).mockResolvedValue("orig");
     vi.mocked(scanTree).mockResolvedValue(["a.md", "b.md"]);
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "orig");
     });
 
@@ -369,10 +369,29 @@ describe("App", () => {
     await waitFor(() => expect(scanTree).toHaveBeenCalledWith("/vault"));
   });
 
+  it("keeps a single-file note and its unsaved edits when a sibling file changes", async () => {
+    act(() => {
+      useStore.getState().setFolder("/vault", ["a.md"], true);
+      useStore.getState().setActive("a.md", "orig");
+      useStore.getState().setContent("unsaved");
+    });
+    render(<App />);
+    await waitFor(() => expect(fileChangedCb).toBeTypeOf("function"));
+    await act(async () => {
+      await fileChangedCb?.({ payload: ["/vault/other.md"] });
+    });
+    expect(useStore.getState()).toMatchObject({
+      single: true,
+      activePath: "a.md",
+      content: "unsaved",
+      dirty: true,
+    });
+  });
+
   it("Cmd-S saves and stays on the note", async () => {
     vi.mocked(writeFile).mockResolvedValue(undefined);
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "hello");
       useStore.getState().setContent("hello edited");
     });
@@ -389,7 +408,7 @@ describe("App", () => {
   it("save via Cmd-S keeps the note dirty when the write fails", async () => {
     vi.mocked(writeFile).mockRejectedValue(new Error("disk full"));
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "hello");
       useStore.getState().setContent("hello edited");
     });
@@ -405,7 +424,7 @@ describe("App", () => {
   it("file-watch matches the active file regardless of path separator (Windows)", async () => {
     vi.mocked(readFile).mockResolvedValue("win reload");
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "orig"); // dirty = false
     });
 
@@ -422,7 +441,7 @@ describe("App", () => {
 
   it("ignores Tapa's own save echoing back from the watcher, even mid-typing", async () => {
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "orig");
       useStore.getState().setContent("saved text");
       useStore.getState().markSaved("saved text");
@@ -503,7 +522,7 @@ describe("App", () => {
   it("Close Note saves first and keeps the folder open", async () => {
     vi.mocked(writeFile).mockResolvedValue(undefined);
     act(() => {
-      useStore.getState().setFolder("/vault", ["a.md"]);
+      useStore.getState().setFolder("/vault", ["a.md"], false);
       useStore.getState().setActive("a.md", "hello");
       useStore.getState().setContent("hello edited");
     });

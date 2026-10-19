@@ -52,6 +52,13 @@ describe("replaceAll", () => {
     expect(ed.target.text()).toBe("dog, Cat and dog");
   });
 
+  // Regression: "İ" lowercases to two chars, which shifted the match by one.
+  it("replaces the right text after a char whose lowercase is longer", () => {
+    const ed = editor("İstanbul foo");
+    expect(replaceAll(ed.target, "foo", "BAR", {})).toBe(1);
+    expect(ed.target.text()).toBe("İstanbul BAR");
+  });
+
   it("changes nothing and adds no undo step when there is no match", () => {
     const ed = editor("hello");
     expect(replaceAll(ed.target, "zzz", "x", {})).toBe(0);

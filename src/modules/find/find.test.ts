@@ -50,4 +50,14 @@ describe("findMatches", () => {
   it("reports the right count on a known string", () => {
     expect(findMatches("banana", "an")).toHaveLength(2);
   });
+
+  // Regression: lowercasing "İ" gives two chars, so every offset after it was
+  // one too far and Replace edited the wrong text.
+  it("keeps offsets on the original text after a char whose lowercase is longer", () => {
+    expect(findMatches("İstanbul foo", "foo")).toEqual([{ start: 9, end: 12 }]);
+  });
+
+  it("treats regex characters in the query as plain text", () => {
+    expect(findMatches("a.b axb (a.b)", "(a.b)")).toEqual([{ start: 8, end: 13 }]);
+  });
 });

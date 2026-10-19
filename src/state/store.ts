@@ -24,8 +24,8 @@ interface AppState {
   paletteOpen: boolean;
   renameOpen: boolean;
 
-  /** Switching to another root closes the open note; a rescan of the same root keeps it. */
-  setFolder: (root: string, files: string[], single?: boolean) => void;
+  /** A different root or mode closes the open note; a rescan of the same one keeps it. */
+  setFolder: (root: string, files: string[], single: boolean) => void;
   clearFolder: () => void;
   setActive: (path: string, content: string, offset?: number) => void;
   /** The open note now lives at `path` (same content, same editor). */
@@ -39,6 +39,15 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void;
   setPaletteOpen: (open: boolean) => void;
   setRenameOpen: (open: boolean) => void;
+}
+
+/** Storage can be blocked; the sidebar then starts open. */
+function storedSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== "closed";
+  } catch {
+    return true;
+  }
 }
 
 const noNote = {
@@ -60,13 +69,12 @@ export const useStore = create<AppState>((set) => ({
   tree: [],
   ...noNote,
   saving: false,
-  sidebarOpen:
-    typeof localStorage === "undefined" || localStorage.getItem(SIDEBAR_KEY) !== "closed",
+  sidebarOpen: storedSidebarOpen(),
   paletteOpen: false,
 
   // `files` feeds the ⌘K palette and must stay openable files only; dir entries
   // (trailing "/") are tree-only, so strip them from the flat list.
-  setFolder: (root, entries, single = false) =>
+  setFolder: (root, entries, single) =>
     set((s) => ({
       ...(s.root !== root || s.single !== single ? noNote : {}),
       root,

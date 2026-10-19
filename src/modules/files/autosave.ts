@@ -2,11 +2,18 @@
 export interface Autosave {
   schedule(): void;
   cancel(): void;
-  /** Runs the save now (dropping the pending timer). Resolves false if the save failed. */
+  /**
+   * Saves now (dropping the pending timer) and again until the note is clean,
+   * so edits typed during a write are saved too. Resolves false if a save failed.
+   */
   flush(): Promise<boolean>;
 }
 
-export function createAutosave(save: () => Promise<boolean>, delayMs: number): Autosave {
+export function createAutosave(
+  save: () => Promise<boolean>,
+  isDirty: () => boolean,
+  delayMs: number,
+): Autosave {
   let timer: number | undefined;
   const cancel = () => {
     window.clearTimeout(timer);
@@ -21,9 +28,12 @@ export function createAutosave(save: () => Promise<boolean>, delayMs: number): A
       }, delayMs);
     },
     cancel,
-    flush() {
-      cancel();
-      return save();
+    async flush() {
+      do {
+        cancel();
+        if (!(await save())) return false;
+      } while (isDirty());
+      return true;
     },
   };
 }

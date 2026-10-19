@@ -43,7 +43,6 @@ vi.mock("@/lib/tauri", () => ({
 
 import { readFile, searchContent } from "@/lib/tauri";
 import { registry } from "@/lib/registry";
-import { filesModule } from "@/modules/files";
 import { bootCorePlugins } from "@/lib/plugins";
 import { useStore } from "@/state/store";
 import App from "./App";
@@ -95,8 +94,7 @@ describe("App content search (⌘⇧F)", () => {
     });
   });
 
-  it("leaves the Go to File… (⌘K) filename finder working", async () => {
-    registry.register(filesModule); // the integrator adds it to the plugin manifest
+  it("Go to File… command opens the filename finder", async () => {
     render(<App />);
     await act(async () => {
       await registry.runCommand("palette.open");
