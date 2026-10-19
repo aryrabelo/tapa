@@ -12,10 +12,16 @@ describe("findMatches", () => {
     ]);
   });
 
-  it("is case-insensitive", () => {
+  it("is case-insensitive by default", () => {
     expect(findMatches("Fox FOX fox", "fox")).toEqual([
       { start: 0, end: 3 },
       { start: 4, end: 7 },
+      { start: 8, end: 11 },
+    ]);
+  });
+
+  it("matches exact case when caseSensitive is on", () => {
+    expect(findMatches("Fox FOX fox", "fox", { caseSensitive: true })).toEqual([
       { start: 8, end: 11 },
     ]);
   });
@@ -43,5 +49,15 @@ describe("findMatches", () => {
 
   it("reports the right count on a known string", () => {
     expect(findMatches("banana", "an")).toHaveLength(2);
+  });
+
+  // Regression: lowercasing "İ" gives two chars, so every offset after it was
+  // one too far and Replace edited the wrong text.
+  it("keeps offsets on the original text after a char whose lowercase is longer", () => {
+    expect(findMatches("İstanbul foo", "foo")).toEqual([{ start: 9, end: 12 }]);
+  });
+
+  it("treats regex characters in the query as plain text", () => {
+    expect(findMatches("a.b axb (a.b)", "(a.b)")).toEqual([{ start: 8, end: 13 }]);
   });
 });

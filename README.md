@@ -75,12 +75,20 @@ of the usual web-app weight.
 
 | Shortcut | Action |
 | --- | --- |
-| `⌘K` / `Ctrl-K` | Open the fuzzy file finder |
+| `⌘O` / `Ctrl-O` | Open a file |
+| `⌘⇧O` / `Ctrl-Shift-O` | Open a folder |
+| `⌘K` / `Ctrl-K` | Go to a file in the open folder |
+| `⌘S` / `Ctrl-S` | Save (notes also save on their own) |
+| `⌘⇧S` / `Ctrl-Shift-S` | Save As |
+| `⌘W` / `Ctrl-W` | Close the note |
 | `⌘F` / `Ctrl-F` | Find in the current file |
+| `⌘⌥F` / `Ctrl-Alt-F` | Find and Replace |
 | `⌘⇧F` / `Ctrl-Shift-F` | Search inside files (content) |
 | `⌘B` / `Ctrl-B` | Toggle the sidebar |
-| `⌘S` / `Ctrl-S` | Save and return to the reader |
-| Double-click | Enter edit mode at that position / exit edit mode |
+| `⌘=` / `⌘-` / `⌘0` | Bigger text / smaller text / actual size |
+| `⌘⇧D` / `Ctrl-Shift-D` | Focus mode |
+
+Every command is also in the menu bar (File, Edit, View, Help).
 
 ## 📦 Install
 

@@ -14,6 +14,7 @@ import {
 } from "@/lib/plugins";
 import { getPluginConfigValue, setPluginConfigValue } from "@/lib/plugin-config";
 import { pickFolder } from "@/lib/tauri";
+import { refocusEditor } from "@/lib/editor-view";
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
   { value: "light", label: "Light", Icon: Sun },
@@ -25,10 +26,16 @@ const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
 // always for a plugin with its own toggle key, since that key works while off.
 const CORE_SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "⌘K", label: "Jump to file" },
+  { keys: "⌘O", label: "Open" },
+  { keys: "⌘⇧O", label: "Open Folder" },
+  { keys: "⌘S", label: "Save" },
+  { keys: "⌘⇧S", label: "Save As" },
+  { keys: "⌘W", label: "Close Note" },
   { keys: "⌘F", label: "Find in file" },
+  { keys: "⌘⌥F", label: "Find and Replace" },
   { keys: "⌘⇧F", label: "Search contents" },
   { keys: "⌘B", label: "Toggle sidebar" },
-  { keys: "⌘S", label: "Save" },
+  { keys: "⌘= / ⌘- / ⌘0", label: "Text size" },
   { keys: "⌘,", label: "Settings" },
 ];
 
@@ -87,6 +94,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
       .filter((p) => p.keys && (p.toggle || isPluginEnabled(p.id)))
       .map((p) => ({ keys: p.keys as string, label: p.label ?? p.id })),
   ];
+
+  // Closing hands the keyboard back to the note.
+  useEffect(() => refocusEditor, []);
 
   useEffect(() => {
     applyTheme(theme);

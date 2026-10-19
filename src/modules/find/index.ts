@@ -1,17 +1,29 @@
 import type { Module } from "@/lib/registry";
+import { requestFind } from "./mode";
 
-// In-document find (⌘F): searches the open note and selects each match in the
-// editor. App renders the FindBar by active-panel id (like search).
+// In-document find (⌘F) and find-and-replace (⌘⌥F): searches the open note
+// and selects each match in the editor. App renders the FindBar by
+// active-panel id (like search).
 export const findModule: Module = {
   id: "find",
   register(reg) {
     reg.command({
       id: "find.open",
       title: "Find in file",
-      keybinding: "mod+f",
       run: (ctx) => {
-        const s = ctx.getState();
-        if (s.activePath) ctx.showPanel("find");
+        if (!ctx.getState().activePath) return;
+        requestFind(false);
+        ctx.showPanel("find");
+      },
+    });
+    // ⌘F and ⌘⌥F come from the native menu accelerators, so no JS keybindings.
+    reg.command({
+      id: "find.replace",
+      title: "Find and replace",
+      run: (ctx) => {
+        if (!ctx.getState().activePath) return;
+        requestFind(true);
+        ctx.showPanel("find");
       },
     });
     reg.command({

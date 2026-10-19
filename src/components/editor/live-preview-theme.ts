@@ -14,12 +14,16 @@ import { EditorView } from "@codemirror/view";
  *     quotes, links) so entering edit mode looks like the rendered reader.
  *
  * It references only the app CSS vars: --foreground, --muted-foreground,
- * --muted, --ring, --border, --link. Editor.tsx no longer carries its own
+ * --muted, --ring, --border, --link, and --text-zoom (the View menu's text
+ * size, set by src/lib/zoom.ts). Editor.tsx no longer carries its own
  * theme block — this extension is the single source of editor styling.
  */
 
 const SERIF = "'Newsreader Variable', ui-serif, Georgia, serif";
 const MONO = 'ui-monospace, "SF Mono", "Menlo", monospace';
+
+// A font size (or the text column) scaled by the user's text size, 1 = 100%.
+const zoomed = (size: string) => `calc(${size} * var(--text-zoom, 1))`;
 
 export const livePreviewTheme: Extension = EditorView.theme({
   "&": {
@@ -28,11 +32,11 @@ export const livePreviewTheme: Extension = EditorView.theme({
     color: "var(--foreground)",
   },
   ".cm-content": {
-    maxWidth: "680px",
+    maxWidth: zoomed("680px"),
     margin: "0 auto",
     padding: "2rem",
     fontFamily: SERIF,
-    fontSize: "1.125rem",
+    fontSize: zoomed("1.125rem"),
     lineHeight: "1.75",
     caretColor: "var(--foreground)",
   },
@@ -73,32 +77,32 @@ export const livePreviewTheme: Extension = EditorView.theme({
   // Headings (line classes). h1-h5 serif/semibold; h6 sans/muted/uppercase.
   ".cm-line.cm-h1": {
     fontFamily: SERIF,
-    fontSize: "2.1rem",
+    fontSize: zoomed("2.1rem"),
     fontWeight: "600",
     lineHeight: "1.2",
   },
   ".cm-line.cm-h2": {
     fontFamily: SERIF,
-    fontSize: "1.55rem",
+    fontSize: zoomed("1.55rem"),
     fontWeight: "600",
   },
   ".cm-line.cm-h3": {
     fontFamily: SERIF,
-    fontSize: "1.25rem",
+    fontSize: zoomed("1.25rem"),
     fontWeight: "600",
   },
   ".cm-line.cm-h4": {
     fontFamily: SERIF,
-    fontSize: "1.05rem",
+    fontSize: zoomed("1.05rem"),
     fontWeight: "600",
   },
   ".cm-line.cm-h5": {
     fontFamily: SERIF,
-    fontSize: "1rem",
+    fontSize: zoomed("1rem"),
     fontWeight: "600",
   },
   ".cm-line.cm-h6": {
-    fontSize: "0.75rem",
+    fontSize: zoomed("0.75rem"),
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: "0.08em",

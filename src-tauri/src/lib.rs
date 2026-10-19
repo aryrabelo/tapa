@@ -2,7 +2,9 @@ mod atomic_write;
 mod brain;
 mod commands;
 mod default_handler;
+mod file_ops;
 pub mod fs_tree;
+mod menu;
 pub mod search;
 mod teleprompter;
 mod watcher;
@@ -20,32 +22,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Native menu: start from Tauri's default (keeps the macOS app/Quit
-            // and Edit copy/paste menus), then add "New File" (CmdOrCtrl+N) to
-            // the File submenu. The click is handled in `.on_menu_event` below.
-            let handle = app.handle();
-            let menu = tauri::menu::Menu::default(handle)?;
-            let new_file = tauri::menu::MenuItemBuilder::with_id("new-file", "New File")
-                .accelerator("CmdOrCtrl+N")
-                .build(handle)?;
-            let mut placed = false;
-            for kind in menu.items()? {
-                if let Some(sub) = kind.as_submenu() {
-                    if sub.text().map(|t| t == "File").unwrap_or(false) {
-                        sub.prepend(&new_file)?;
-                        placed = true;
-                        break;
-                    }
-                }
-            }
-            // No File submenu (non-macOS default): add our own at the front.
-            if !placed {
-                let file = tauri::menu::SubmenuBuilder::new(handle, "File")
-                    .item(&new_file)
-                    .build()?;
-                menu.insert(&file, 0)?;
-            }
-            handle.set_menu(menu)?;
+            // Native menu bar; each custom item emits `"menu"` with its id.
+            menu::install(app.handle())?;
 
             // Desktop-only: the updater + process plugins have no mobile support,
             // so a future `tauri android/ios` build must not register them.
@@ -86,14 +64,14 @@ pub fn run() {
             watcher::watch_folder,
             teleprompter::setup_overlay,
             brain::ensure_brain,
-            commands::mint_assemblyai_token
+            commands::mint_assemblyai_token,
+            menu::set_recent_menu,
+            file_ops::rename_path,
+            file_ops::trash_path,
+            file_ops::reveal_path,
+            file_ops::path_kind
         ])
-        .on_menu_event(|app, event| {
-            if event.id() == "new-file" {
-                use tauri::Emitter;
-                let _ = app.emit("menu:new-file", ());
-            }
-        })
+        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, _event| {

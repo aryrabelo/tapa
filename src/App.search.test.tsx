@@ -34,6 +34,7 @@ vi.mock("@/lib/tauri", () => ({
   takePendingOpen: vi.fn(() => Promise.resolve([])),
   pickFolder: vi.fn(() => Promise.resolve(null)),
   pickFile: vi.fn(() => Promise.resolve(null)),
+  setRecentMenu: vi.fn(() => Promise.resolve()),
   searchContent: vi.fn((_root, _q, _opts, onHit) => {
     onHitCb = onHit;
     return Promise.resolve();
@@ -93,9 +94,11 @@ describe("App content search (⌘⇧F)", () => {
     });
   });
 
-  it("leaves the ⌘K filename finder working", async () => {
+  it("Go to File… command opens the filename finder", async () => {
     render(<App />);
-    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    await act(async () => {
+      await registry.runCommand("palette.open");
+    });
     expect(await screen.findByPlaceholderText("Jump to file...")).toBeInTheDocument();
   });
 });

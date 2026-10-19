@@ -1,12 +1,15 @@
 import type * as React from "react";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy } from "react";
+import { useStore } from "@/state/store";
 
 // The fuzzy file finder pulls in cmdk + the radix Dialog (~18KB gzip). It is
-// hidden until ⌘K, so the dialog body is loaded on first open instead of at
-// startup — this thin wrapper only owns the open state and the ⌘K listener.
+// hidden until the first "Go to File…" (⌘K, a native menu accelerator), so the
+// dialog body loads on first open; this thin wrapper only reads the store flag.
 const PaletteDialog = lazy(() =>
   import("./PaletteDialog").then((m) => ({ default: m.PaletteDialog })),
 );
+
+let loaded = false;
 
 export function CommandPalette({
   files,
@@ -17,21 +20,8 @@ export function CommandPalette({
   onPick: (path: string) => void;
   onOpenPath: (path: string) => void;
 }): React.ReactElement | null {
-  const [open, setOpen] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setLoaded(true);
-        setOpen((o) => !o);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
+  const open = useStore((s) => s.paletteOpen);
+  if (open) loaded = true;
   if (!loaded) return null;
   return (
     <Suspense fallback={null}>
@@ -40,7 +30,7 @@ export function CommandPalette({
         onPick={onPick}
         onOpenPath={onOpenPath}
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={useStore.getState().setPaletteOpen}
       />
     </Suspense>
   );

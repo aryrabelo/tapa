@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { applyTheme, getStoredTheme } from "./lib/theme";
+import { applyZoom, getZoom } from "./lib/zoom";
 import { installContextMenuBlocker } from "./lib/context-menu";
 import { useStore } from "./state/store";
 import "./index.css";
@@ -24,8 +25,10 @@ function currentLabel(): string {
   }
 }
 
-// Apply the persisted theme before first paint to avoid a flash of the wrong theme.
+// Apply the persisted theme and text size before first paint, so neither
+// flashes the wrong look or jumps once the plugins load.
 applyTheme(getStoredTheme());
+applyZoom(getZoom());
 
 // Block the default webview right-click menu (a custom app menu comes later).
 installContextMenuBlocker();
