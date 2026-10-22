@@ -1,0 +1,51 @@
+CHANGELOG.md
+  s_7578d5e55c9a5d::t_54d1fe0adda53e 9-15
+README.md
+  s_7578d5e55c9a5d::t_0d5a965e19b2e2 61-63,93,95
+src-tauri/src/changes.rs
+  s_7578d5e55c9a5d::t_21b865d4fe885a 1-305
+src-tauri/src/commands.rs
+  s_7578d5e55c9a5d::t_d16e2be1135f5c 4,6,45-67
+src-tauri/src/lib.rs
+  s_7578d5e55c9a5d::t_dd2c46b85f264d 3,60-61
+src/App.search.test.tsx
+  s_7578d5e55c9a5d::t_bfb082ea7c5449 32
+src/App.test.tsx
+  s_7578d5e55c9a5d::t_8f03870fafd630 20
+src/App.tsx
+  s_7578d5e55c9a5d::t_66089a37e28942 53-58,172-176
+src/lib/plugins.ts
+  s_7578d5e55c9a5d::t_e12706e0b0e095 132-139
+src/lib/tauri.ts
+  s_7578d5e55c9a5d::t_9a2694a83b1515 13-19
+src/modules/changes/ChangesPanel.test.tsx
+  s_7578d5e55c9a5d::t_828a9272a63866 1-106
+src/modules/changes/ChangesPanel.tsx
+  s_7578d5e55c9a5d::t_831a3a242215cb 1-168
+src/modules/changes/diff.test.ts
+  s_7578d5e55c9a5d::t_6dd488dc49f9b7 1-114
+src/modules/changes/diff.ts
+  s_7578d5e55c9a5d::t_09d204ae1e11a8 1-330
+src/modules/changes/index.ts
+  s_7578d5e55c9a5d::t_301c232521ca3d 1-31
+src/modules/files/actions.test.ts
+  s_7578d5e55c9a5d::t_350f97fc652dfa 25
+src/modules/files/actions.ts
+  s_7578d5e55c9a5d::t_b30cd4b9f104b8 15,36-46,141,206,315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9948ddd22851ace5aa390caf64c5f805e1fa895a",
+  "prompts": {},
+  "sessions": {
+    "s_7578d5e55c9a5d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a370f249-5712-4b52-880c-da242b37fcaf",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ary Rabelo <aryrabelo@gmail.com>"
+    }
+  }
+}
