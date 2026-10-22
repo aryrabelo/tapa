@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **What changed** (`⌘⇧G`): lists the
+  sentences you added and removed in the open note, without Markdown symbols
+  or a diff. Tables show cell text. The earlier version is the last Git commit
+  when the folder is a repository, otherwise the copy Tapa kept when you opened
+  the note. It can be switched off in Settings.
+
 ## [0.6.0] - 2026-10-19
 
 ### Added

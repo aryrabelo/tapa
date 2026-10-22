@@ -17,6 +17,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@/lib/tauri", () => ({
   scanTree: vi.fn(),
   readFile: vi.fn(),
+  rememberVersion: vi.fn(() => Promise.resolve()),
   writeFile: vi.fn(),
   createPath: vi.fn(),
   watchFolder: vi.fn(),

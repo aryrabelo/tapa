@@ -22,6 +22,7 @@ vi.mock("@/lib/tauri", () => ({
   pickFolder: vi.fn(),
   pickSavePath: vi.fn(),
   readFile: vi.fn(),
+  rememberVersion: vi.fn(() => Promise.resolve()),
   renamePath: vi.fn(),
   revealPath: vi.fn(),
   scanTree: vi.fn(),

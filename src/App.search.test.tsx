@@ -29,6 +29,7 @@ vi.mock("@/components/editor/Editor", () => ({ Editor: () => null }));
 vi.mock("@/lib/tauri", () => ({
   scanTree: vi.fn(() => Promise.resolve(["a.md", "b.md"])),
   readFile: vi.fn(() => Promise.resolve("# a\n\nneedle one\n")),
+  rememberVersion: vi.fn(() => Promise.resolve()),
   writeFile: vi.fn(),
   watchFolder: vi.fn(() => Promise.resolve()),
   takePendingOpen: vi.fn(() => Promise.resolve([])),

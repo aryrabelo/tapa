@@ -12,6 +12,7 @@ import {
   pickFolder,
   pickSavePath,
   readFile,
+  rememberVersion,
   renamePath,
   revealPath,
   scanTree,
@@ -30,6 +31,17 @@ let inflight: Promise<boolean> | null = null;
 
 async function settle(): Promise<void> {
   while (inflight) await inflight;
+}
+
+/**
+ * Reads a note to open it, and asks Rust to keep the text on disk as "the note
+ * as it was when opened" for the What changed panel. Fire and forget: that panel
+ * is optional. It is dispatched before the read returns, so it precedes any save
+ * of this note.
+ */
+function readNote(abs: string): Promise<string> {
+  void Promise.resolve(rememberVersion(abs)).catch(() => {});
+  return readFile(abs);
 }
 
 async function write(abs: string, content: string, silent: boolean): Promise<boolean> {
@@ -126,7 +138,7 @@ export async function openNote(rel: string): Promise<void> {
   if (!root || rel === activePath) return;
   try {
     await leaveNote(
-      () => readFile(`${root}/${rel}`),
+      () => readNote(`${root}/${rel}`),
       (content) => {
         // A transition queued before this one may have switched the root.
         if (useStore.getState().root === root) useStore.getState().setActive(rel, content);
@@ -191,7 +203,7 @@ export async function openFile(file: string, quiet = false): Promise<boolean> {
   const { parent, name } = parentOf(file);
   try {
     const opened = await leaveNote(
-      () => readFile(file),
+      () => readNote(file),
       (content) => {
         useStore.getState().setFolder(parent, [name], true);
         useStore.getState().setActive(name, content);
@@ -300,6 +312,7 @@ export async function saveAs(): Promise<void> {
     toast.error(String(e));
     return;
   }
+  void Promise.resolve(rememberVersion(to)).catch(() => {});
   pushRecent(to);
   if (!rel) await watch(parent);
   toast.success(`Saved as ${name}`);
