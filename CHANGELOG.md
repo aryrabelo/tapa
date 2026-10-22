@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-22
+
 ### Added
 - **What changed** (`⌘⇧G`): lists the
   sentences you added and removed in the open note, without Markdown symbols
@@ -224,7 +226,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
-[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/aryrabelo/tapa/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/aryrabelo/tapa/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/aryrabelo/tapa/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/aryrabelo/tapa/compare/v0.3.0...v0.4.0
