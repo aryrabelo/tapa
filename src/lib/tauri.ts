@@ -10,6 +10,13 @@ export const writeFile = (path: string, content: string): Promise<void> =>
   invoke<void>("write_file", { path, content });
 export const createPath = (path: string, dir: boolean): Promise<void> =>
   invoke<void>("create_path", { path, dir });
+/** Where an earlier copy of a note came from: the Git `HEAD`, or the copy Tapa kept when the note was opened. */
+export type PreviousVersion = { source: "git" | "saved"; text: string };
+export const previousVersion = (path: string): Promise<PreviousVersion | null> =>
+  invoke<PreviousVersion | null>("previous_version", { path });
+/** Keeps the file's current text as Tapa's copy of the note as opened, replacing any earlier copy. */
+export const rememberVersion = (path: string): Promise<void> =>
+  invoke<void>("remember_version", { path });
 export const watchFolder = (root: string): Promise<void> => invoke<void>("watch_folder", { root });
 export const takePendingOpen = (): Promise<string[]> => invoke<string[]>("take_pending_open");
 export const isDefaultMarkdownHandler = (): Promise<boolean> =>

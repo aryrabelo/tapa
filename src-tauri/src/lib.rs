@@ -1,5 +1,6 @@
 mod atomic_write;
 mod brain;
+mod changes;
 mod commands;
 mod default_handler;
 mod file_ops;
@@ -56,6 +57,8 @@ pub fn run() {
             commands::scan_tree,
             commands::read_file,
             commands::write_file,
+            commands::previous_version,
+            commands::remember_version,
             commands::create_path,
             commands::take_pending_open,
             commands::search_content,

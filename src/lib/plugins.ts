@@ -129,6 +129,14 @@ export const PLUGINS: readonly PluginManifest[] = [
     ],
     load: () => import("@/modules/brain").then((m) => m.brainModule),
   },
+  {
+    id: "changes",
+    label: "What changed",
+    blurb: "Lists the sentences you added and removed in a note, instead of a wall of symbols.",
+    keys: "⌘⇧G",
+    defaultEnabled: true,
+    load: () => import("@/modules/changes").then((m) => m.changesModule),
+  },
 ];
 
 const OVERRIDE_KEY = "tapa-plugin-overrides";

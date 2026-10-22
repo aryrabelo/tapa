@@ -58,6 +58,9 @@ of the usual web-app weight.
   grouped by file with the match highlighted, and `Enter` jumps to the line.
 - **Find in file** — `⌘F` to find within the open document; matches are
   highlighted in place, `Enter` / `⇧Enter` step through them, `Esc` closes.
+- **What changed** — `⌘⇧G` lists the sentences you added and removed in a note,
+  against the last Git commit or the copy Tapa kept when you opened it. No diff
+  symbols.
 - **Live reload** — external changes on disk reload automatically; if you have
   unsaved edits, Tapa asks before discarding them.
 - **OS-native theme** — follows your system light/dark appearance, with a manual
@@ -87,8 +90,9 @@ of the usual web-app weight.
 | `⌘B` / `Ctrl-B` | Toggle the sidebar |
 | `⌘=` / `⌘-` / `⌘0` | Bigger text / smaller text / actual size |
 | `⌘⇧D` / `Ctrl-Shift-D` | Focus mode |
+| `⌘⇧G` / `Ctrl-Shift-G` | Show what changed in the note |
 
-Every command is also in the menu bar (File, Edit, View, Help).
+Almost every command is also in the menu bar (File, Edit, View, Help).
 
 ## 📦 Install
 

@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::search::{search_dir, Hit, SearchOpts};
-use tauri::ipc::Channel;
+use tauri::{ipc::Channel, Manager};
 
-const MAX_BYTES: u64 = 5 * 1024 * 1024; // 5 MB guard
+use crate::changes::MAX_BYTES;
 
 /// Buffer of file paths the OS asked us to open (file-association launch /
 /// `open file.md`). Drained by the frontend on mount via `take_pending_open`.
@@ -40,6 +40,29 @@ pub fn read_file(path: String) -> Result<String, String> {
 pub fn write_file(path: String, content: String) -> Result<(), String> {
     crate::atomic_write::write_atomic(Path::new(&path), content.as_bytes())
         .map_err(|e| e.to_string())
+}
+
+/// Where Tapa keeps its per-note snapshots. `None` when the app data dir
+/// cannot be resolved; snapshots are then skipped, Git history still works.
+fn versions_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|d| d.join("versions"))
+}
+
+/// The note as it was before the current edits: `HEAD` in a Git work tree,
+/// otherwise the copy Tapa remembered when the note was opened, otherwise `None`.
+#[tauri::command]
+pub fn previous_version(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Option<crate::changes::PreviousVersion>, String> {
+    crate::changes::previous_version(versions_dir(&app).as_deref(), Path::new(&path))
+}
+
+/// Called each time a note is opened: replaces the remembered copy with the
+/// note's current on-disk content. Saving never touches it.
+#[tauri::command]
+pub fn remember_version(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    crate::changes::remember_version(versions_dir(&app).as_deref(), Path::new(&path))
 }
 
 /// Create a new file or directory at `path` (absolute), making parent dirs as

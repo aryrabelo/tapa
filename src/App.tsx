@@ -50,6 +50,12 @@ const SearchPanel = lazy(() =>
 
 const FindBar = lazy(() => import("@/modules/find/FindBar").then((m) => ({ default: m.FindBar })));
 
+const ChangesPanel = lazy(() =>
+  import("@/modules/changes/ChangesPanel").then((m) => ({ default: m.ChangesPanel })),
+);
+
+const closeChanges = () => void registry.runCommand("changes.close");
+
 const SettingsPanel = lazy(() =>
   import("@/modules/settings/SettingsPanel").then((m) => ({ default: m.SettingsPanel })),
 );
@@ -161,6 +167,11 @@ export default function App(): React.ReactElement {
       {activePanelId === "find" && (
         <Suspense fallback={null}>
           <FindBar />
+        </Suspense>
+      )}
+      {activePanelId === "changes" && (
+        <Suspense fallback={null}>
+          <ChangesPanel onClose={closeChanges} />
         </Suspense>
       )}
       {activePanelId === "settings" && (
