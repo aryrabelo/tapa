@@ -2,6 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import {
   type EditorState,
   type Extension,
+  Facet,
   type Range,
   StateField,
   type Text,
@@ -242,6 +243,14 @@ class TableWidget extends WidgetType {
 }
 
 /**
+ * Tables another extension needs as Markdown source, each provider answering
+ * for one table's [from, to]. Review mode uses it: a drawn table is a block
+ * replace, which would hide the highlights and removed text of a change in it.
+ */
+export const tableAsSource =
+  Facet.define<(state: EditorState, from: number, to: number) => boolean>();
+
+/**
  * Block-replace every GFM table the selection does not touch with a rendered
  * table widget. Exported for testability; `tree` defaults to the state's
  * current (possibly partial) syntax tree.
@@ -251,6 +260,7 @@ export function buildTableDecorations(
   tree: Tree = syntaxTree(state),
 ): DecorationSet {
   const { doc, selection } = state;
+  const asSource = state.facet(tableAsSource);
   const decos: Range<Decoration>[] = [];
   tree.iterate({
     enter(ref) {
@@ -259,7 +269,7 @@ export function buildTableDecorations(
         const { from, to } = ref;
         // Inclusive: a caret at either table edge counts as inside.
         const touched = selection.ranges.some((r) => r.from <= to && r.to >= from);
-        if (!touched) {
+        if (!touched && !asSource.some((wants) => wants(state, from, to))) {
           const widget = new TableWidget(doc.sliceString(from, to), from, ref.node, doc);
           decos.push(
             Decoration.replace({ widget, block: true }).range(
@@ -279,11 +289,19 @@ export function buildTableDecorations(
  * Renders GFM tables as real tables while the caret is elsewhere; clicking a
  * cell reveals that table's raw source with the caret in the clicked cell.
  * A StateField because block decorations cannot come from a ViewPlugin.
+ * Effects and reconfiguration rebuild too: a `tableAsSource` provider may
+ * answer differently after either.
  */
 export const tableWidgets: Extension = StateField.define<DecorationSet>({
   create: (state) => buildTableDecorations(state),
   update(decos, tr) {
-    if (tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)) {
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.length > 0 ||
+      tr.reconfigured ||
+      syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    ) {
       return buildTableDecorations(tr.state);
     }
     return decos;
