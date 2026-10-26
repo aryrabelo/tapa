@@ -1,0 +1,48 @@
+CHANGELOG.md
+  h_b156936c57c455 9-25
+README.md
+  h_b156936c57c455 70-79
+docs/VISION.md
+  h_b156936c57c455 51-57
+src-tauri/Cargo.lock
+  h_b156936c57c455 11-21,93,95,134-250,355-363,373-385,568-576,638-647,657,672,687-695,706-715,739,752,765,896-913,963,1125-1151,1189-1208,1370-1382,1751-1756,1763-1780,2089-2098,2252-2267,2513-2525,2545-2577,2584-2613,2909-2918,2958-2963,3052-3062,3108-3121,3568,3586,3595,3705-3736,3744,3947-3957,3975-3984,4089-4094,4164-4174,4216,4403,4963,4967-4977,5045-5055,6245-6254,6278-6333,6380-6393,6445-6481
+src-tauri/Cargo.toml
+  h_b156936c57c455 41-50,52,76
+src-tauri/src/ai.rs
+  h_b156936c57c455 1-678
+src-tauri/src/lib.rs
+  h_b156936c57c455 1,16-18,57,77-82
+src/lib/recent.ts
+  h_b156936c57c455 57-61
+src/lib/tauri.ts
+  h_b156936c57c455 36-73
+src/modules/autocomplete/ai.test.ts
+  h_b156936c57c455 1-115
+src/modules/autocomplete/ai.ts
+  h_b156936c57c455 1-70
+src/modules/autocomplete/ghost.test.ts
+  h_b156936c57c455 6-14,224-358
+src/modules/autocomplete/ghost.ts
+  h_b156936c57c455 3-5,29-48,52,61,64-67,71,75,111-187,307-314,337-338,340,345-352,360-363,374-376
+src/modules/autocomplete/index.test.ts
+  h_b156936c57c455 5,16-25,29-30,37-38,41,43,51-59,62-86,103,106-107,113-175
+src/modules/autocomplete/index.ts
+  h_b156936c57c455 2,4,9,11-52,55-56,59,63-71,74-75,79-81,90-92,94-95,110-112,117,119-120
+src/modules/settings/AiSettings.tsx
+  h_b156936c57c455 1-184
+src/modules/settings/SettingsPanel.tsx
+  h_b156936c57c455 18,268-269
+src/modules/settings/settings.test.tsx
+  h_b156936c57c455 30-33,39,43-50,53,126-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb6a7873d01ad13e6286e07eabe7d39ba6006c6d",
+  "prompts": {},
+  "humans": {
+    "h_b156936c57c455": {
+      "author": "Ary Rabelo <aryrabelo@gmail.com>"
+    }
+  }
+}
