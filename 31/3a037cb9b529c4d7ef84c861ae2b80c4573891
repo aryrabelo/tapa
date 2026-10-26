@@ -1,0 +1,26 @@
+CHANGELOG.md
+  h_b156936c57c455 9-10,248-249
+package-lock.json
+  h_b156936c57c455 3,9
+package.json
+  h_b156936c57c455 3
+src-tauri/Cargo.lock
+  h_b156936c57c455 80
+src-tauri/Cargo.toml
+  h_b156936c57c455 3
+src-tauri/src/changes.rs
+  h_b156936c57c455 191-193,220-223,227-230
+src-tauri/tauri.conf.json
+  h_b156936c57c455 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "313a037cb9b529c4d7ef84c861ae2b80c4573891",
+  "prompts": {},
+  "humans": {
+    "h_b156936c57c455": {
+      "author": "Ary Rabelo <aryrabelo@gmail.com>"
+    }
+  }
+}
