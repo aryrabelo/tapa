@@ -3,6 +3,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { createPath, scanTree } from "@/lib/tauri";
+import type { FileNode } from "@/lib/tree";
 import { onToasterNeeded, toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
 import { registry, useActivePanel } from "@/lib/registry";
@@ -93,6 +94,11 @@ async function createEntry(rel: string, dir: boolean): Promise<void> {
   }
 }
 
+// Single-file mode lists every file opened that way, flat, keyed by absolute path.
+function openFilesTree(files: string[]): FileNode[] {
+  return files.map((path) => ({ name: path.slice(path.lastIndexOf("/") + 1), path, kind: "file" }));
+}
+
 export default function App(): React.ReactElement {
   const s = useStore();
   const [toasterReady, setToasterReady] = useState(false);
@@ -181,13 +187,23 @@ export default function App(): React.ReactElement {
       )}
       {s.sidebarOpen && (
         <Suspense fallback={null}>
-          <AppSidebar
-            tree={s.tree}
-            active={s.activePath}
-            onPick={openNote}
-            onNewFile={newFile}
-            onCreate={createEntry}
-          />
+          {s.single ? (
+            <AppSidebar
+              tree={openFilesTree(s.openFiles)}
+              active={s.root && s.activePath ? `${s.root}/${s.activePath}` : null}
+              onPick={openFile}
+              onNewFile={newFile}
+              onCreate={createEntry}
+            />
+          ) : (
+            <AppSidebar
+              tree={s.tree}
+              active={s.activePath}
+              onPick={openNote}
+              onNewFile={newFile}
+              onCreate={createEntry}
+            />
+          )}
         </Suspense>
       )}
       <div className="flex min-w-0 flex-1 flex-col">

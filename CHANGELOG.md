@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Opening a file from Finder (or Open…, drag & drop, Open Recent) while other
+  loose files are open no longer replaces them: each one joins the sidebar list,
+  like a tab, and a click switches back. Close Note (`⌘W`) removes a file from
+  the list and opens the next one. The list comes back on the next launch.
+
 ## [0.7.0] - 2026-10-22
 
 ### Added

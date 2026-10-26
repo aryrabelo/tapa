@@ -41,14 +41,19 @@ import {
   trashPath,
   writeFile,
 } from "@/lib/tauri";
+import { toast } from "@/lib/toast";
 import { useStore } from "@/state/store";
 import {
   AUTOSAVE_MS,
   autosave,
   closeNote,
   installAutosave,
+  openFile,
+  openFolder,
   openNote,
+  rememberSession,
   renameNote,
+  restoreSession,
   save,
   saveAs,
   trashNote,
@@ -285,5 +290,176 @@ describe("save as", () => {
       content: "edited, then more",
       dirty: false,
     });
+  });
+});
+
+describe("open files (single-file mode)", () => {
+  /** Files whose read fails, e.g. deleted or moved since they were listed. */
+  let gone: Set<string>;
+
+  beforeEach(() => {
+    gone = new Set();
+    localStorage.clear();
+    vi.mocked(readFile).mockImplementation((p: string) =>
+      gone.has(p) ? Promise.reject(`${p} is gone`) : Promise.resolve(`body of ${p}`),
+    );
+  });
+
+  async function openAll(...files: string[]) {
+    for (const f of files) expect(await openFile(f)).toBe(true);
+  }
+
+  it("re-opening a listed file keeps one entry in its place", async () => {
+    await openAll("/x/one.md", "/y/two.md", "/z/three.md", "/x/one.md");
+    expect(useStore.getState()).toMatchObject({
+      root: "/x",
+      activePath: "one.md",
+      content: "body of /x/one.md",
+      openFiles: ["/x/one.md", "/y/two.md", "/z/three.md"],
+    });
+  });
+
+  it("closing the last open file goes back to the welcome screen", async () => {
+    await openAll("/x/one.md");
+    await closeNote();
+    expect(useStore.getState()).toMatchObject({
+      root: null,
+      single: false,
+      activePath: null,
+      openFiles: [],
+    });
+  });
+
+  it("closing a file opens its neighbour: the next one, or the previous at the end", async () => {
+    await openAll("/x/one.md", "/y/two.md", "/z/three.md", "/y/two.md");
+    await closeNote();
+    expect(useStore.getState()).toMatchObject({
+      root: "/z",
+      activePath: "three.md",
+      content: "body of /z/three.md",
+      openFiles: ["/x/one.md", "/z/three.md"],
+    });
+    await closeNote();
+    expect(useStore.getState()).toMatchObject({
+      root: "/x",
+      activePath: "one.md",
+      content: "body of /x/one.md",
+      openFiles: ["/x/one.md"],
+    });
+  });
+
+  it("Move to Trash drops the file from the list and opens its neighbour", async () => {
+    await openAll("/x/one.md", "/y/two.md", "/z/three.md", "/y/two.md");
+    vi.mocked(confirmAction).mockResolvedValue(true);
+    vi.mocked(trashPath).mockResolvedValue(undefined);
+    await trashNote();
+    expect(trashPath).toHaveBeenCalledWith("/y/two.md");
+    expect(useStore.getState()).toMatchObject({
+      root: "/z",
+      activePath: "three.md",
+      content: "body of /z/three.md",
+      openFiles: ["/x/one.md", "/z/three.md"],
+    });
+  });
+
+  it("renaming replaces the file in place and keeps the others", async () => {
+    await openAll("/x/one.md", "/y/two.md", "/z/three.md", "/y/two.md");
+    vi.mocked(renamePath).mockResolvedValue(undefined);
+    expect(await renameNote("deux")).toBeNull();
+    expect(renamePath).toHaveBeenCalledWith("/y/two.md", "/y/deux.md");
+    expect(useStore.getState()).toMatchObject({
+      root: "/y",
+      single: true,
+      activePath: "deux.md",
+      openFiles: ["/x/one.md", "/y/deux.md", "/z/three.md"],
+    });
+  });
+
+  it("a listed file that can't be read leaves the list; the open note stays", async () => {
+    await openAll("/x/one.md", "/y/two.md");
+    gone.add("/x/one.md");
+    expect(await openFile("/x/one.md")).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("/x/one.md is gone"));
+    expect(useStore.getState()).toMatchObject({
+      root: "/y",
+      activePath: "two.md",
+      content: "body of /y/two.md",
+      openFiles: ["/y/two.md"],
+    });
+  });
+
+  it("opening a folder clears the list; the next file starts a new one", async () => {
+    await openAll("/x/one.md", "/y/two.md");
+    vi.mocked(scanTree).mockResolvedValue(["a.md"]);
+    expect(await openFolder("/vault")).toBe(true);
+    expect(useStore.getState()).toMatchObject({ root: "/vault", single: false, openFiles: [] });
+    await openAll("/z/three.md");
+    expect(useStore.getState()).toMatchObject({
+      root: "/z",
+      single: true,
+      activePath: "three.md",
+      openFiles: ["/z/three.md"],
+    });
+  });
+
+  it("a file inside the open folder opens as its note and stays off the list", async () => {
+    useStore.getState().setFolder("/vault", ["a.md", "b.md"], false);
+    useStore.getState().setActive("a.md", "aye");
+    vi.mocked(scanTree).mockResolvedValue(["a.md", "b.md"]);
+    expect(await openFile("/vault/b.md")).toBe(true);
+    expect(useStore.getState()).toMatchObject({
+      root: "/vault",
+      single: false,
+      activePath: "b.md",
+      content: "body of /vault/b.md",
+      openFiles: [],
+    });
+  });
+
+  it("remembers the list in the session and restores it in saved order", async () => {
+    const off = rememberSession();
+    await openAll("/x/one.md", "/y/two.md");
+    off();
+    expect(JSON.parse(localStorage.getItem("tapa-session") ?? "null")).toEqual({
+      root: "/y",
+      single: true,
+      note: "two.md",
+      files: ["/x/one.md", "/y/two.md"],
+    });
+
+    useStore.setState(useStore.getInitialState());
+    localStorage.setItem(
+      "tapa-session",
+      JSON.stringify({
+        root: "/y",
+        single: true,
+        note: "two.md",
+        files: ["/z/three.md", "/y/two.md", "/x/one.md"],
+      }),
+    );
+    await restoreSession();
+    expect(useStore.getState()).toMatchObject({
+      root: "/y",
+      single: true,
+      activePath: "two.md",
+      content: "body of /y/two.md",
+      openFiles: ["/z/three.md", "/y/two.md", "/x/one.md"],
+    });
+  });
+
+  it("does not restore the list when the last note can't be read", async () => {
+    gone.add("/y/two.md");
+    localStorage.setItem(
+      "tapa-session",
+      JSON.stringify({
+        root: "/y",
+        single: true,
+        note: "two.md",
+        files: ["/x/one.md", "/y/two.md"],
+      }),
+    );
+    await restoreSession();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(useStore.getState()).toMatchObject({ root: null, activePath: null, openFiles: [] });
   });
 });
