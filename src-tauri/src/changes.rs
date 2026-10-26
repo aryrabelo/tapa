@@ -188,7 +188,9 @@ mod tests {
         fs::write(&note, "opened\n").unwrap();
         remember_version(Some(versions.path()), &note).unwrap();
 
-        let prev = previous_version(Some(versions.path()), &note).unwrap().unwrap();
+        let prev = previous_version(Some(versions.path()), &note)
+            .unwrap()
+            .unwrap();
         assert_eq!(prev.source, VersionSource::Git);
         assert_eq!(prev.text, "committed\n");
     }
@@ -215,11 +217,17 @@ mod tests {
         let note = dir.path().join("note.md");
         fs::write(&note, "v1\n").unwrap();
 
-        assert_eq!(previous_version(Some(versions.path()), &note).unwrap(), None);
+        assert_eq!(
+            previous_version(Some(versions.path()), &note).unwrap(),
+            None
+        );
         assert_eq!(previous_version(None, &note).unwrap(), None);
         // A note that does not exist has no previous version either.
         let gone = dir.path().join("gone.md");
-        assert_eq!(previous_version(Some(versions.path()), &gone).unwrap(), None);
+        assert_eq!(
+            previous_version(Some(versions.path()), &gone).unwrap(),
+            None
+        );
     }
 
     #[test]
