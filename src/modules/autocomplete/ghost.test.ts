@@ -3,7 +3,15 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ACCEPTED_CLASS, GHOST_CLASS, GLOW_MS, ghostText } from "./ghost";
+import {
+  ACCEPTED_CLASS,
+  AI_GHOST_CLASS,
+  GHOST_CLASS,
+  GLOW_MS,
+  ghostText,
+  REMOTE_DELAY_MS,
+  type RemoteSuggest,
+} from "./ghost";
 
 const created: EditorView[] = [];
 
@@ -211,5 +219,140 @@ describe("ghost text in the editor", () => {
     type(view, "o rio T");
     expect(view.state.doc.toString()).toBe("o rio Tapajós\n\n```\no rio T");
     expect(ghost(view)).toBeNull();
+  });
+});
+
+describe("the remote (AI) ghost", () => {
+  function mountRemote(doc: string, remote: RemoteSuggest, notes: string[] = []): EditorView {
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: doc.length },
+      extensions: [markdown({ base: markdownLanguage }), ghostText(() => notes, remote)],
+    });
+    const view = new EditorView({ state, parent: document.body });
+    created.push(view);
+    return view;
+  }
+
+  /** Lets a resolved remote promise reach the editor. */
+  const settle = async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+
+  function pending() {
+    let resolve: (text: string | null) => void = () => {};
+    let signal: AbortSignal | null = null;
+    const remote = vi.fn<RemoteSuggest>((_before, _after, s) => {
+      signal = s;
+      return new Promise((r) => {
+        resolve = r;
+      });
+    });
+    return { remote, resolve: (t: string | null) => resolve(t), signal: () => signal };
+  }
+
+  const isAi = (view: EditorView): boolean =>
+    view.contentDOM.querySelector(`.${GHOST_CLASS}`)?.classList.contains(AI_GHOST_CLASS) ?? false;
+
+  it("is not asked when the notes have a suggestion", () => {
+    useFakeTimeouts();
+    const remote = vi.fn<RemoteSuggest>(async () => " nunca.");
+    const view = mountRemote("o rio Tapajós\n", remote);
+    type(view, "o rio T");
+    expect(ghost(view)).toBe("apajós");
+    vi.advanceTimersByTime(REMOTE_DELAY_MS * 2);
+    expect(remote).not.toHaveBeenCalled();
+    expect(isAi(view)).toBe(false);
+  });
+
+  it("is asked only after a pause, and its answer is shown as an AI ghost Tab accepts", async () => {
+    useFakeTimeouts();
+    const remote = vi.fn<RemoteSuggest>(async () => " ficou calmo.");
+    const view = mountRemote("Primeira linha.\n", remote);
+    type(view, "O rio");
+    vi.advanceTimersByTime(REMOTE_DELAY_MS - 1);
+    expect(remote).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(remote).toHaveBeenCalledTimes(1);
+    expect(remote).toHaveBeenCalledWith("Primeira linha.\nO rio", "", expect.any(AbortSignal));
+
+    await settle();
+    expect(ghost(view)).toBe(" ficou calmo.");
+    expect(isAi(view)).toBe(true);
+
+    expect(press(view, "Tab")).toBe(true);
+    expect(view.state.doc.toString()).toBe("Primeira linha.\nO rio ficou calmo.");
+    expect(view.state.selection.main.head).toBe(view.state.doc.length);
+    expect(ghost(view)).toBeNull();
+    expect(glowing(view)).toEqual([" ficou calmo."]);
+    // Accepting is not typing, so it does not ask again.
+    vi.advanceTimersByTime(REMOTE_DELAY_MS * 2);
+    expect(remote).toHaveBeenCalledTimes(1);
+  });
+
+  it("typing aborts the request in flight", () => {
+    useFakeTimeouts();
+    const p = pending();
+    const view = mountRemote("", p.remote);
+    type(view, "Hello");
+    vi.advanceTimersByTime(REMOTE_DELAY_MS);
+    expect(p.signal()?.aborted).toBe(false);
+    type(view, "!");
+    expect(p.signal()?.aborted).toBe(true);
+  });
+
+  it("drops an answer that arrives after more typing", async () => {
+    useFakeTimeouts();
+    const p = pending();
+    const view = mountRemote("", p.remote);
+    type(view, "Hello");
+    vi.advanceTimersByTime(REMOTE_DELAY_MS);
+    type(view, "!");
+    p.resolve(" world.");
+    await settle();
+    expect(ghost(view)).toBeNull();
+    expect(view.state.doc.toString()).toBe("Hello!");
+  });
+
+  it("drops an answer that arrives after the caret moved", async () => {
+    useFakeTimeouts();
+    const p = pending();
+    const view = mountRemote("Hello", p.remote);
+    type(view, " there");
+    vi.advanceTimersByTime(REMOTE_DELAY_MS);
+    view.dispatch({ selection: { anchor: 2 } });
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    p.resolve(" friend.");
+    await settle();
+    expect(ghost(view)).toBeNull();
+  });
+
+  it("Esc hides an AI ghost like any other", async () => {
+    useFakeTimeouts();
+    const view = mountRemote("", async () => " world.");
+    type(view, "Hello");
+    vi.advanceTimersByTime(REMOTE_DELAY_MS);
+    await settle();
+    expect(ghost(view)).toBe(" world.");
+    expect(press(view, "Escape")).toBe(true);
+    expect(ghost(view)).toBeNull();
+    expect(press(view, "Tab")).toBe(false);
+    expect(view.state.doc.toString()).toBe("Hello");
+  });
+
+  it("is not asked in the middle of a word, on a blank line or inside code", () => {
+    useFakeTimeouts();
+    const remote = vi.fn<RemoteSuggest>(async () => null);
+    const view = mountRemote("Hello world\n\n```\n", remote);
+    view.dispatch({ selection: { anchor: 3 } });
+    type(view, "x"); // "Helxlo": the caret is inside a word
+    vi.advanceTimersByTime(REMOTE_DELAY_MS);
+    view.dispatch({ selection: { anchor: 13 } });
+    type(view, " "); // only a space on the line
+    vi.advanceTimersByTime(REMOTE_DELAY_MS);
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    type(view, "code");
+    vi.advanceTimersByTime(REMOTE_DELAY_MS);
+    expect(remote).not.toHaveBeenCalled();
   });
 });

@@ -48,7 +48,13 @@ We sell Tapa as **the first agent-reactive Markdown vault**, not "another reader
   **optional local module** (`model2vec` + `sqlite-vec` + RRF), never a dependency.
 - ❌ No LLM in the binary. Synthesis / `think` / gap-analysis is the **user's own
   agent's** job via MCP — strictly more free + offline-capable than gbrain's keyed
-  `think`.
+  `think`. Still no model in the binary; what exists is an **optional
+  bring-your-own-key continuation** for the autocomplete ghost, **off by
+  default**. The user turns it on and pastes their own OpenAI or Anthropic key,
+  which Rust keeps in the **OS keychain** (never in the webview's storage or the
+  bundle) and uses for one small HTTPS request per pause (text around the caret
+  in, one short sentence out). No model ships, nothing leaves the machine while
+  it is off, and local suggestions from the user's notes always win.
 - ❌ No 24/7 "dream-cycle" daemon (where gbrain's operational fragility lives).
   Enrichment is event- or user-triggered, never an always-on server.
 

@@ -15,6 +15,7 @@ import {
 import { getPluginConfigValue, setPluginConfigValue } from "@/lib/plugin-config";
 import { pickFolder } from "@/lib/tauri";
 import { refocusEditor } from "@/lib/editor-view";
+import { AiSettings } from "./AiSettings";
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
   { value: "light", label: "Light", Icon: Sun },
@@ -263,6 +264,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
               })}
             </ul>
           </section>
+
+          <AiSettings />
 
           <section className="flex flex-col gap-3">
             <h3 className="text-sm font-medium">Agent access (MCP)</h3>

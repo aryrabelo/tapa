@@ -67,6 +67,16 @@ of the usual web-app weight.
   and **Undo**; the bar on top has **Keep all**, **Undo all** and **Done**.
   Undo is a normal edit (`⌘Z` brings the text back); Keep never touches the
   file or Git.
+- **Autocomplete** — finishes what you are typing in gray from your other
+  notes; `Tab` keeps it, `Esc` hides it. Local only.
+- **AI suggestions (optional, off by default)** — when your notes have nothing
+  to offer and you pause, Tapa can ask OpenAI or Anthropic for one short
+  sentence, with **your own API key**. Turn it on in Settings. The key goes
+  into the system keychain (never into the app's storage, never shown again)
+  and the request is made by the Rust side. Only the text around the caret is
+  sent (about 1,500 characters before it, 300 after); nothing is sent while it
+  is off. Default models: `gpt-6-luna` (OpenAI) and `claude-haiku-5-5`
+  (Anthropic).
 - **Live reload** — external changes on disk reload automatically; if you have
   unsaved edits, Tapa asks before discarding them.
 - **OS-native theme** — follows your system light/dark appearance, with a manual

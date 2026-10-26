@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **AI suggestions** (optional, off by default): when your notes have no
+  suggestion and you pause typing, Tapa can ask OpenAI or Anthropic for one
+  short sentence, shown as the same gray ghost with a faint dotted underline.
+  `Tab` keeps it and `Esc` hides it, as before. Turn it on in Settings with
+  your own API key; the key is kept in the system keychain (macOS Keychain,
+  Windows Credential Manager, Linux Secret Service) and is never shown again.
+  Only the text around the caret (about 1,500 characters before, 300 after)
+  is sent, and nothing is sent while it is off. Defaults: `gpt-6-luna` and
+  `claude-haiku-5-5`, or any model you name.
+
+### Changed
+- Autocomplete now also learns from your other open files and your recent
+  Markdown files, not only the open folder, so a file opened on its own from
+  Finder gets suggestions too. They are read in the background; a file that
+  can't be read is skipped.
+
 ## [0.8.0] - 2026-10-26
 
 ### Added
