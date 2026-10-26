@@ -3,17 +3,16 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "@/components/ui/icons";
 import { refocusEditor } from "@/lib/editor-view";
+import { registry } from "@/lib/registry";
 import { type PreviousVersion, previousVersion } from "@/lib/tauri";
 import { useStore } from "@/state/store";
 import { type Change, sentenceChanges } from "./diff";
+import { SOURCE_LABEL } from "./labels";
 
 /** Typing pauses this long before the list is recomputed. */
 export const REFRESH_MS = 300;
 
-const SOURCE_LABEL: Record<PreviousVersion["source"], string> = {
-  git: "Since the last commit",
-  saved: "Since you opened this note",
-};
+const reviewInText = () => void registry.runCommand("changes.review");
 
 type Result =
   | { status: "loading" }
@@ -128,6 +127,12 @@ function Body({ result }: { result: Result }): React.ReactElement | null {
         <div className="flex flex-col gap-3">
           <Group title="Added" tone="added" items={added} />
           <Group title="Removed" tone="removed" items={removed} />
+          {/* A block wrapper keeps the button its own width; no extra CSS utility. */}
+          <div>
+            <Button size="sm" variant="outline" onClick={reviewInText}>
+              Review in the text
+            </Button>
+          </div>
         </div>
       );
     }

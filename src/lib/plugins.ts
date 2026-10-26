@@ -132,8 +132,9 @@ export const PLUGINS: readonly PluginManifest[] = [
   {
     id: "changes",
     label: "What changed",
-    blurb: "Lists the sentences you added and removed in a note, instead of a wall of symbols.",
-    keys: "⌘⇧G",
+    blurb:
+      "Lists the sentences you added and removed in a note, and lets you keep or undo each change in the text.",
+    keys: "⌘⇧G / ⌘⇧R",
     defaultEnabled: true,
     load: () => import("@/modules/changes").then((m) => m.changesModule),
   },

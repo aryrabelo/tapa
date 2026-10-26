@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PreviousVersion } from "@/lib/tauri";
+import { registry } from "@/lib/registry";
 import { useStore } from "@/state/store";
 import type { Change } from "./diff";
 
@@ -102,5 +103,21 @@ describe("ChangesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers Review in the text only when there are changes", async () => {
+    const run = vi.spyOn(registry, "runCommand").mockResolvedValue();
+    previousVersion.mockResolvedValue({ source: "git", text: "same" });
+    sentenceChanges.mockReturnValue([]);
+    render(<ChangesPanel onClose={() => {}} />);
+    await settle();
+    expect(screen.queryByRole("button", { name: "Review in the text" })).toBeNull();
+
+    sentenceChanges.mockReturnValue([{ kind: "added", text: "Mais uma." }]);
+    act(() => useStore.setState({ content: "same. Mais uma." }));
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Review in the text" }));
+    expect(run).toHaveBeenCalledWith("changes.review");
+    run.mockRestore();
   });
 });

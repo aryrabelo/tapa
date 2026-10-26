@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Review changes in the text** (`⌘⇧R`, or **Review in the text** in What
+  changed): the open note shows its changes since the last commit, or since
+  you opened it, in place. Added text is tinted and removed text stays struck
+  through. Each change has **Keep** and **Undo**, and the bar on top has
+  **Keep all**, **Undo all** and **Done** (`Esc`). Undo is an ordinary edit
+  that saves and `⌘Z` brings back; Keep only stops showing the change, it
+  never touches the file or Git. A table with a change shows its Markdown
+  while you review, so the change is visible. The review code loads the first
+  time you use it.
+
 ### Changed
 - Opening a file from Finder (or Open…, drag & drop, Open Recent) while other
   loose files are open no longer replaces them: each one joins the sidebar list,

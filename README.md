@@ -61,6 +61,12 @@ of the usual web-app weight.
 - **What changed** — `⌘⇧G` lists the sentences you added and removed in a note,
   against the last Git commit or the copy Tapa kept when you opened it. No diff
   symbols.
+- **Review changes in the text** — `⌘⇧R` (or **Review in the text** in the
+  What changed list) shows the same changes inside the note: added text is
+  tinted, removed text stays in place struck through. Each change has **Keep**
+  and **Undo**; the bar on top has **Keep all**, **Undo all** and **Done**.
+  Undo is a normal edit (`⌘Z` brings the text back); Keep never touches the
+  file or Git.
 - **Live reload** — external changes on disk reload automatically; if you have
   unsaved edits, Tapa asks before discarding them.
 - **OS-native theme** — follows your system light/dark appearance, with a manual
@@ -91,6 +97,7 @@ of the usual web-app weight.
 | `⌘=` / `⌘-` / `⌘0` | Bigger text / smaller text / actual size |
 | `⌘⇧D` / `Ctrl-Shift-D` | Focus mode |
 | `⌘⇧G` / `Ctrl-Shift-G` | Show what changed in the note |
+| `⌘⇧R` / `Ctrl-Shift-R` | Review the changes in the text (Keep / Undo each one) |
 
 Almost every command is also in the menu bar (File, Edit, View, Help).
 
