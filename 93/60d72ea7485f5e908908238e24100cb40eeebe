@@ -1,0 +1,26 @@
+CHANGELOG.md
+  h_b156936c57c455 9-14
+docs/research/markdown-apps-comparativo.md
+  h_b156936c57c455 1-248
+src/App.test.tsx
+  h_b156936c57c455 265-298
+src/App.tsx
+  h_b156936c57c455 6,97-101,190-206
+src/modules/files/actions.test.ts
+  h_b156936c57c455 44,51-52,54,56,295-465
+src/modules/files/actions.ts
+  h_b156936c57c455 186-188,205,210-214,219-221,230-247,375-376,409,414,436,439-442,444-445,453,456-459,461,472-473,479-484,491,515-519
+src/state/store.ts
+  h_b156936c57c455 11-12,44,72,84,90-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9360d72ea7485f5e908908238e24100cb40eeebe",
+  "prompts": {},
+  "humans": {
+    "h_b156936c57c455": {
+      "author": "Ary Rabelo <aryrabelo@gmail.com>"
+    }
+  }
+}
