@@ -1,0 +1,38 @@
+CHANGELOG.md
+  h_b156936c57c455 9-19
+README.md
+  h_b156936c57c455 64-69,100
+package-lock.json
+  h_b156936c57c455 3,9,15,826-838
+package.json
+  h_b156936c57c455 35
+pnpm-lock.yaml
+  h_b156936c57c455 23-25,383-385,3783-3790
+src/components/editor/table-widget.ts
+  h_b156936c57c455 5,245-252,263,272,292-293,298-304
+src/lib/plugins.ts
+  h_b156936c57c455 135-137
+src/modules/changes/ChangesPanel.test.tsx
+  h_b156936c57c455 4,107-122
+src/modules/changes/ChangesPanel.tsx
+  h_b156936c57c455 6,10,15,130-135
+src/modules/changes/index.ts
+  h_b156936c57c455 1,5-7,20-34
+src/modules/changes/labels.ts
+  h_b156936c57c455 1-7
+src/modules/changes/review.test.ts
+  h_b156936c57c455 1-170
+src/modules/changes/review.ts
+  h_b156936c57c455 1-313
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0fc55c07468630e6c8aa82ce15a1e5a0c44a09c6",
+  "prompts": {},
+  "humans": {
+    "h_b156936c57c455": {
+      "author": "Ary Rabelo <aryrabelo@gmail.com>"
+    }
+  }
+}
