@@ -8,6 +8,8 @@ interface AppState {
   /** True when the user opened one file: `root` is its parent and the tree lists only it. */
   single: boolean;
   files: string[]; // relative paths
+  /** Single-file mode: every file opened this way, absolute, in open order (the sidebar list). */
+  openFiles: string[];
   tree: FileNode[];
   activePath: string | null; // relative path
   /** Identity of the open note for the editor's React key. A rename keeps it. */
@@ -39,6 +41,7 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void;
   setPaletteOpen: (open: boolean) => void;
   setRenameOpen: (open: boolean) => void;
+  setOpenFiles: (openFiles: string[]) => void;
 }
 
 /** Storage can be blocked; the sidebar then starts open. */
@@ -66,6 +69,7 @@ export const useStore = create<AppState>((set) => ({
   root: null,
   single: false,
   files: [],
+  openFiles: [],
   tree: [],
   ...noNote,
   saving: false,
@@ -77,12 +81,15 @@ export const useStore = create<AppState>((set) => ({
   setFolder: (root, entries, single) =>
     set((s) => ({
       ...(s.root !== root || s.single !== single ? noNote : {}),
+      ...(single ? {} : { openFiles: [] }),
       root,
       single,
       files: entries.filter((e) => !e.endsWith("/")),
       tree: buildTree(entries),
     })),
-  clearFolder: () => set({ ...noNote, root: null, single: false, files: [], tree: [] }),
+  clearFolder: () =>
+    set({ ...noNote, root: null, single: false, files: [], openFiles: [], tree: [] }),
+  setOpenFiles: (openFiles) => set({ openFiles }),
   setActive: (path, content, offset = 0) =>
     set((s) => ({
       activePath: path,

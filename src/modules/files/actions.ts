@@ -183,8 +183,9 @@ function parentOf(file: string): { parent: string; name: string } {
 
 /**
  * Opens one Markdown file by absolute path. Inside the open folder it opens as
- * a note of that folder; otherwise the sidebar shows just this file, scoped to
- * its parent so save and live reload keep the same root + relative model.
+ * a note of that folder; otherwise it joins the sidebar's list of open files
+ * (earlier ones stay, like tabs), scoped to its parent so save and live reload
+ * keep the same root + relative model.
  */
 export async function openFile(file: string, quiet = false): Promise<boolean> {
   const rel = relInFolder(file);
@@ -201,22 +202,47 @@ export async function openFile(file: string, quiet = false): Promise<boolean> {
     return useStore.getState().activePath === rel;
   }
   const { parent, name } = parentOf(file);
+  const abs = `${parent}/${name}`;
   try {
     const opened = await leaveNote(
       () => readNote(file),
       (content) => {
-        useStore.getState().setFolder(parent, [name], true);
-        useStore.getState().setActive(name, content);
+        const st = useStore.getState();
+        const list = st.single ? st.openFiles : [];
+        st.setFolder(parent, [name], true);
+        st.setActive(name, content);
+        if (!list.includes(abs)) st.setOpenFiles([...list, abs]);
       },
     );
     if (!opened) return false;
   } catch (e) {
+    // A listed file that can't be read anymore leaves the list.
+    const st = useStore.getState();
+    if (st.openFiles.includes(abs)) st.setOpenFiles(st.openFiles.filter((f) => f !== abs));
     if (!quiet) toast.error(String(e));
     return false;
   }
   pushRecent(file);
   await watch(parent);
   return true;
+}
+
+/**
+ * Drops `abs` from the open-files list (single-file mode) and resolves the
+ * neighbour to open next; with none left the window goes back to the welcome
+ * screen. Runs inside a `leaveNote` commit, so the note is already saved.
+ */
+function dropOpenFile(abs: string): string | null {
+  const { openFiles } = useStore.getState();
+  const i = openFiles.indexOf(abs);
+  const rest = openFiles.filter((f) => f !== abs);
+  if (rest.length === 0) {
+    useStore.getState().clearFolder();
+    return null;
+  }
+  useStore.getState().closeNote();
+  useStore.getState().setOpenFiles(rest);
+  return rest[Math.min(Math.max(i, 0), rest.length - 1)] ?? null;
 }
 
 /** Opens whatever is at `abs` (recent item, dropped item). Gone paths leave Open Recent. */
@@ -346,6 +372,8 @@ export async function renameNote(input: string): Promise<string | null> {
   useStore.getState().moveActive(rel);
   if (single) {
     useStore.getState().setFolder(root, [rel], true);
+    const { openFiles } = useStore.getState();
+    useStore.getState().setOpenFiles(openFiles.map((f) => (f === from ? to : f)));
     removeRecent(from);
     pushRecent(to);
   } else {
@@ -378,11 +406,12 @@ export async function trashNote(): Promise<void> {
   if (!ok) return;
   // The Trash gets the latest text. Edits typed while it moves are saved back
   // at the old path rather than dropped.
+  let next: string | null = null;
   try {
     const trashed = await leaveNote(
       () => trashPath(abs),
       () => {
-        if (single) useStore.getState().clearFolder();
+        if (single) next = dropOpenFile(abs);
         else useStore.getState().closeNote();
       },
     );
@@ -404,11 +433,16 @@ export async function trashNote(): Promise<void> {
     }
   }
   toast.success(`Moved “${name}” to the Trash.`);
+  if (next) await openFile(next);
 }
 
-/** Closes the note after saving it; the folder stays. With no note open, closes the window. */
+/**
+ * Closes the note after saving it; the folder stays. A single file leaves the
+ * open-files list and its neighbour opens. With no note open, closes the window.
+ */
 export async function closeNote(): Promise<void> {
-  if (!useStore.getState().activePath) {
+  const { root, activePath, single } = useStore.getState();
+  if (!activePath) {
     try {
       await getCurrentWindow().close();
     } catch {
@@ -416,10 +450,15 @@ export async function closeNote(): Promise<void> {
     }
     return;
   }
+  let next: string | null = null;
   await leaveNote(
     () => Promise.resolve(),
-    () => useStore.getState().closeNote(),
+    () => {
+      if (single && root) next = dropOpenFile(`${root}/${activePath}`);
+      else useStore.getState().closeNote();
+    },
   );
+  if (next) await openFile(next);
 }
 
 // --- Session: reopen the last folder (or file) and note on launch ----------
@@ -430,18 +469,26 @@ interface Session {
   root: string;
   single: boolean;
   note: string | null;
+  /** Single-file mode: the open-files list, absolute. */
+  files?: string[];
 }
 
 /** Keeps the last open folder/file and note in localStorage. Returns the unsubscribe. */
 export function rememberSession(): () => void {
   return useStore.subscribe((s, prev) => {
-    if (s.root === prev.root && s.single === prev.single && s.activePath === prev.activePath) {
+    if (
+      s.root === prev.root &&
+      s.single === prev.single &&
+      s.activePath === prev.activePath &&
+      s.openFiles === prev.openFiles
+    ) {
       return;
     }
     try {
       if (!s.root) localStorage.removeItem(SESSION_KEY);
       else {
         const session: Session = { root: s.root, single: s.single, note: s.activePath };
+        if (s.single) session.files = s.openFiles;
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       }
     } catch {
@@ -465,7 +512,11 @@ export async function restoreSession(signal?: AbortSignal): Promise<void> {
   if (!s || typeof s.root !== "string" || signal?.aborted) return;
   const note = typeof s.note === "string" ? s.note : null;
   if (s.single) {
-    if (note) await openFile(`${s.root}/${note}`, true);
+    if (!note || !(await openFile(`${s.root}/${note}`, true))) return;
+    // The other files come back as listed; a gone one leaves when picked.
+    const saved = Array.isArray(s.files) ? s.files.filter((f) => typeof f === "string") : [];
+    const { openFiles } = useStore.getState();
+    useStore.getState().setOpenFiles([...saved, ...openFiles.filter((f) => !saved.includes(f))]);
     return;
   }
   if (!(await openFolder(s.root, true)) || signal?.aborted) return;

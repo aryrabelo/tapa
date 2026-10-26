@@ -262,6 +262,40 @@ describe("App", () => {
     expect(watchFolder).toHaveBeenCalledWith("/x/y");
   });
 
+  it("keeps earlier OS-opened files listed and switches between them", async () => {
+    vi.mocked(readFile).mockImplementation((p: string) => Promise.resolve(`body of ${p}`));
+    vi.mocked(watchFolder).mockResolvedValue(undefined);
+
+    render(<App />);
+    await waitFor(() => expect(openFilesCb).not.toBeNull());
+    await act(async () => {
+      openFilesCb?.({ payload: ["/x/one.md"] });
+    });
+    await act(async () => {
+      openFilesCb?.({ payload: ["/y/z/two.md"] });
+    });
+
+    await waitFor(() => expect(useStore.getState().activePath).toBe("two.md"));
+    expect(useStore.getState().openFiles).toEqual(["/x/one.md", "/y/z/two.md"]);
+    expect(screen.getByRole("button", { name: "one.md" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "one.md" }));
+    await waitFor(() => {
+      const s = useStore.getState();
+      expect(s.root).toBe("/x");
+      expect(s.activePath).toBe("one.md");
+      expect(s.content).toBe("body of /x/one.md");
+    });
+    expect(useStore.getState().openFiles).toEqual(["/x/one.md", "/y/z/two.md"]);
+
+    // Closing a file drops it from the list and opens its neighbour.
+    await act(async () => {
+      await registry.runCommand("file.close");
+    });
+    await waitFor(() => expect(useStore.getState().activePath).toBe("two.md"));
+    expect(useStore.getState().openFiles).toEqual(["/y/z/two.md"]);
+  });
+
   it("keeps the note open when save fails", async () => {
     vi.mocked(writeFile).mockRejectedValue(new Error("disk full"));
 
