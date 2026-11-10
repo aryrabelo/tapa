@@ -17,7 +17,6 @@ const MARKER_NODES: Record<string, true> = {
   QuoteMark: true,
   ListMark: true,
   LinkMark: true,
-  URL: true,
   StrikethroughMark: true,
 };
 
@@ -89,6 +88,23 @@ function activeLines(view: EditorView): Set<number> {
   return lines;
 }
 
+/** `URL` node: the destination of a `[text](url)`/`![alt](url)` duplicates the
+ * visible text, so it hides like any other marker once the caret leaves the
+ * line. A bare `https://…`/`www.…`/e-mail, the inside of a `<…>` autolink, or
+ * a link reference definition's URL IS the visible text, so it must never be
+ * hidden — only styled like a link. */
+function decorateUrl(node: SyntaxNodeRef, isActive: boolean, decos: Range<Decoration>[]): void {
+  const { from, to } = node;
+  if (to <= from) return;
+  const parentName = node.node.parent?.name;
+  const isLinkDestination = parentName === "Link" || parentName === "Image";
+  if (isLinkDestination) {
+    if (!isActive) decos.push(Decoration.replace({}).range(from, to));
+    return;
+  }
+  decos.push(Decoration.mark({ class: "cm-link" }).range(from, to));
+}
+
 /** Decoration(s) for a single syntax node; pushed into `decos`. */
 function decorateNode(
   node: SyntaxNodeRef,
@@ -98,6 +114,10 @@ function decorateNode(
 ): void {
   const { name, from, to } = node;
 
+  if (name === "URL") {
+    decorateUrl(node, isActive, decos);
+    return;
+  }
   if (MARKER_NODES[name]) {
     if (isActive || to <= from) return;
     // `## Title`: also hide the one space after the heading marker, or the

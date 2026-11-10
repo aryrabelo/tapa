@@ -98,6 +98,7 @@ of the usual web-app weight.
 | `⌘⇧D` / `Ctrl-Shift-D` | Focus mode |
 | `⌘⇧G` / `Ctrl-Shift-G` | Show what changed in the note |
 | `⌘⇧R` / `Ctrl-Shift-R` | Review the changes in the text (Keep / Undo each one) |
+| `Tab` / `Shift-Tab` | Nest / un-nest a list item; indent / un-indent inside a code block |
 
 Almost every command is also in the menu bar (File, Edit, View, Help).
 
