@@ -26,9 +26,12 @@ export function AiSettings(): React.ReactElement | null {
   const [model, setModel] = useState("");
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const keyId = useId();
   const modelId = useId();
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` re-runs the load on Retry.
   useEffect(() => {
     let live = true;
     aiStatus().then(
@@ -36,24 +39,53 @@ export function AiSettings(): React.ReactElement | null {
         if (!live) return;
         setStatus(s);
         setModel(s.model);
+        setAiStatus(s);
+        setLoadFailed(false);
       },
-      () => {},
+      () => {
+        if (live) setLoadFailed(true);
+      },
     );
     return () => {
       live = false;
     };
-  }, []);
+  }, [attempt]);
 
-  if (!status) return null;
+  if (!status) {
+    if (!loadFailed) return null;
+    return (
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">AI suggestions</h3>
+        <p role="alert" className="text-xs text-destructive">
+          Could not read the AI settings.
+        </p>
+        <div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setLoadFailed(false);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      </section>
+    );
+  }
 
-  const apply = async (request: Promise<AiStatus>, failure: string): Promise<void> => {
+  // True when Rust accepted the change; false after showing `failure`.
+  const apply = async (request: Promise<AiStatus>, failure: string): Promise<boolean> => {
     try {
       const next = await request;
       setStatus(next);
       setAiStatus(next);
       setError(null);
+      return true;
     } catch {
       setError(failure);
+      return false;
     }
   };
 
@@ -66,8 +98,10 @@ export function AiSettings(): React.ReactElement | null {
   const saveKey = async () => {
     const typed = key.trim();
     if (!typed) return;
-    setKey("");
-    await apply(aiSetKey(typed), "Could not save the key in the system keychain.");
+    // Keep what was pasted until the keychain has it.
+    if (await apply(aiSetKey(typed), "Could not save the key in the system keychain.")) {
+      setKey("");
+    }
   };
 
   const label = PROVIDERS.find((p) => p.value === status.provider)?.label ?? status.provider;
@@ -100,9 +134,11 @@ export function AiSettings(): React.ReactElement | null {
               aria-pressed={status.provider === value}
               onClick={() => {
                 if (value === status.provider) return;
-                // A model name belongs to one provider; start from the default.
-                setModel("");
-                void save({ provider: value, model: "" });
+                // A model name belongs to one provider; start from the default,
+                // but only once the switch is saved.
+                void save({ provider: value, model: "" }).then((ok) => {
+                  if (ok) setModel("");
+                });
               }}
             >
               {name}
@@ -112,42 +148,52 @@ export function AiSettings(): React.ReactElement | null {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor={keyId} className="text-xs font-medium">
-          {label} API key
-        </label>
+        {status.keychainUnavailable ? (
+          <p role="alert" className="text-xs text-destructive">
+            Tapa could not reach your system keychain, so it cannot tell whether a key is saved.
+          </p>
+        ) : null}
         {status.hasKey ? (
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">Key saved</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void apply(aiClearKey(), "Could not remove the key.")}
-            >
-              Remove
-            </Button>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium">{label} API key</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Key saved</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void apply(aiClearKey(), "Could not remove the key.")}
+              >
+                Remove
+              </Button>
+            </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <Input
-              id={keyId}
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              value={key}
-              placeholder={`Paste your ${label} key`}
-              onChange={(e) => setKey(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void saveKey();
-              }}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!key.trim()}
-              onClick={() => void saveKey()}
-            >
-              Save key
-            </Button>
+          <div className="flex flex-col gap-1">
+            <label htmlFor={keyId} className="text-xs font-medium">
+              {label} API key
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                id={keyId}
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                value={key}
+                placeholder={`Paste your ${label} key`}
+                onChange={(e) => setKey(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveKey();
+                }}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!key.trim()}
+                onClick={() => void saveKey()}
+              >
+                Save key
+              </Button>
+            </div>
           </div>
         )}
         <span className="text-[0.7rem] text-muted-foreground">

@@ -39,12 +39,14 @@ import { getPluginConfigValue } from "@/lib/plugin-config";
 import { type AiStatus, aiClearKey, aiSaveSettings, aiSetKey, aiStatus } from "@/lib/tauri";
 import { useStore } from "@/state/store";
 import App from "@/App";
+import * as aiModule from "@/modules/autocomplete/ai";
 
 const aiOff: AiStatus = {
   enabled: false,
   provider: "openai",
   model: "",
   hasKey: false,
+  keychainUnavailable: false,
   defaultModels: { openai: "gpt-6-luna", anthropic: "claude-haiku-5-5" },
 };
 
@@ -178,5 +180,68 @@ describe("AI suggestions in Settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(aiClearKey).toHaveBeenCalledTimes(1);
     expect(await screen.findByPlaceholderText("Paste your OpenAI key")).toHaveValue("");
+  });
+  it("hands the loaded status to autocomplete", async () => {
+    const spy = vi.spyOn(aiModule, "setAiStatus");
+    const loaded = { ...aiOff, enabled: true, hasKey: true };
+    vi.mocked(aiStatus).mockResolvedValue(loaded);
+    await open();
+    expect(spy).toHaveBeenCalledWith(loaded);
+    spy.mockRestore();
+  });
+
+  it("says when the settings could not be read, and Retry loads them", async () => {
+    vi.mocked(aiStatus).mockRejectedValueOnce(new Error("no tauri"));
+    render(<App />);
+    fireEvent.keyDown(window, { key: ",", metaKey: true });
+    expect(await screen.findByText("Could not read the AI settings.")).toHaveAttribute(
+      "role",
+      "alert",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("switch", { name: "AI suggestions" })).toBeInTheDocument();
+  });
+
+  it("keeps the typed key when the keychain refuses it", async () => {
+    vi.mocked(aiSetKey).mockRejectedValue({ kind: "keychain" });
+    await open();
+    const field = screen.getByPlaceholderText("Paste your OpenAI key");
+    fireEvent.change(field, { target: { value: "sk-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("system keychain");
+    expect(field).toHaveValue("sk-secret");
+  });
+
+  it("keeps the model when switching provider fails to save", async () => {
+    vi.mocked(aiStatus).mockResolvedValue({ ...aiOff, model: "gpt-x" });
+    vi.mocked(aiSaveSettings).mockRejectedValueOnce({ kind: "config" });
+    const sw = await open();
+    fireEvent.click(screen.getByRole("button", { name: "Anthropic" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save");
+    expect(screen.getByPlaceholderText("gpt-6-luna")).toHaveValue("gpt-x");
+
+    vi.mocked(aiSaveSettings).mockResolvedValue({ ...aiOff, model: "gpt-x", enabled: true });
+    fireEvent.click(sw);
+    expect(aiSaveSettings).toHaveBeenLastCalledWith({
+      enabled: true,
+      provider: "openai",
+      model: "gpt-x",
+    });
+  });
+
+  it("labels only fields that exist when a key is saved", async () => {
+    vi.mocked(aiStatus).mockResolvedValue({ ...aiOff, hasKey: true });
+    await open();
+    await screen.findByText("Key saved");
+    for (const label of document.querySelectorAll("label[for]")) {
+      expect(document.getElementById(label.getAttribute("for") ?? "")).not.toBeNull();
+    }
+  });
+
+  it("says when the keychain cannot be reached, and still offers the key field", async () => {
+    vi.mocked(aiStatus).mockResolvedValue({ ...aiOff, keychainUnavailable: true });
+    await open();
+    expect(screen.getByRole("alert")).toHaveTextContent(/system keychain/);
+    expect(screen.getByPlaceholderText("Paste your OpenAI key")).toBeInTheDocument();
   });
 });

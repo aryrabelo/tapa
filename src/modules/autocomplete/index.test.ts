@@ -39,6 +39,7 @@ function aiStatus(enabled: boolean): AiStatus {
     provider: "openai",
     model: "",
     hasKey: enabled,
+    keychainUnavailable: false,
     defaultModels: { openai: "gpt-6-luna", anthropic: "claude-haiku-5-5" },
   };
 }

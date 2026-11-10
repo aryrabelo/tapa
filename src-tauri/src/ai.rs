@@ -101,6 +101,8 @@ pub struct AiStatus {
     provider: Provider,
     model: String,
     has_key: bool,
+    /// The keychain lookup failed, so whether a key is saved is unknown.
+    keychain_unavailable: bool,
     default_models: DefaultModels,
 }
 
@@ -371,17 +373,24 @@ impl Inner {
 
     fn status(&mut self, app: &AppHandle) -> AiStatus {
         let config = self.config(app).clone();
-        let has_key = matches!(self.key(config.provider), Ok(Some(_)));
-        AiStatus {
-            enabled: config.enabled,
-            provider: config.provider,
-            model: config.model,
-            has_key,
-            default_models: DefaultModels {
-                openai: Provider::OpenAi.default_model(),
-                anthropic: Provider::Anthropic.default_model(),
-            },
-        }
+        let key = self.key(config.provider);
+        status_from(config, key)
+    }
+}
+
+/// The status for `config` given the keychain lookup. A failed lookup is
+/// reported as such, not as "no key".
+fn status_from(config: AiConfig, key: Result<Option<String>, AiError>) -> AiStatus {
+    AiStatus {
+        enabled: config.enabled,
+        provider: config.provider,
+        model: config.model,
+        has_key: matches!(key, Ok(Some(_))),
+        keychain_unavailable: key.is_err(),
+        default_models: DefaultModels {
+            openai: Provider::OpenAi.default_model(),
+            anthropic: Provider::Anthropic.default_model(),
+        },
     }
 }
 
@@ -502,6 +511,22 @@ mod tests {
             .iter()
             .find(|(n, _)| *n == name)
             .map(|(_, v)| v.as_str())
+    }
+
+    #[test]
+    fn status_tells_keychain_failure_apart_from_no_key() {
+        let config = AiConfig::default();
+        let saved =
+            serde_json::to_value(status_from(config.clone(), Ok(Some("k".into())))).unwrap();
+        assert_eq!(saved["hasKey"], true);
+        assert_eq!(saved["keychainUnavailable"], false);
+
+        let none = status_from(config.clone(), Ok(None));
+        assert!(!none.has_key && !none.keychain_unavailable);
+
+        let failed = status_from(config, Err(AiError::Keychain));
+        assert!(!failed.has_key);
+        assert!(failed.keychain_unavailable);
     }
 
     #[test]

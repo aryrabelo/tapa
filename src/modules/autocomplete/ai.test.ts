@@ -11,6 +11,7 @@ const status = (patch: Partial<AiStatus> = {}): AiStatus => ({
   provider: "openai",
   model: "",
   hasKey: true,
+  keychainUnavailable: false,
   defaultModels: { openai: "gpt-6-luna", anthropic: "claude-haiku-5-5" },
   ...patch,
 });
@@ -105,11 +106,13 @@ describe("aiSuggest", () => {
     expect(vi.mocked(toast.warning).mock.calls[0][0]).toMatch(/key was not accepted/);
   });
 
-  it("stays silent when Rust says AI is off or has no key", async () => {
+  it.each(["off", "noKey"])("stays silent and stops asking when Rust says %s", async (kind) => {
     const { ai, aiComplete, toast } = await fresh();
     ai.setAiStatus(status());
-    aiComplete.mockRejectedValue({ kind: "noKey" });
+    aiComplete.mockRejectedValue({ kind });
     await ai.aiSuggest("a", "", signal());
+    await ai.aiSuggest("b", "", signal());
+    expect(aiComplete).toHaveBeenCalledTimes(1);
     expect(toast.warning).not.toHaveBeenCalled();
   });
 });

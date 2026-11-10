@@ -42,6 +42,8 @@ export interface AiStatus {
   /** Blank means the provider's default model. */
   model: string;
   hasKey: boolean;
+  /** The keychain could not be read, so whether a key is saved is unknown. */
+  keychainUnavailable: boolean;
   defaultModels: Record<AiProvider, string>;
 }
 /** Why `aiComplete` failed, as sent by Rust. */
