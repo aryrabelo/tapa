@@ -23,6 +23,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Finder gets suggestions too. They are read in the background; a file that
   can't be read is skipped.
 
+### Fixed
+- Suggestions from your other notes no longer stop after the first one when
+  files in the folder keep changing (for example while an AI agent or Git is
+  working there).
+
 ## [0.8.0] - 2026-10-26
 
 ### Added
