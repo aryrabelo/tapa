@@ -26,7 +26,7 @@ use std::collections::HashSet;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -45,14 +45,16 @@ const TIMEOUT_MAX: u32 = 10_000;
 const MAX_TEXT_LEN: usize = 160;
 const MAX_RESOLVE: usize = 200;
 const MAX_CAPTURE_LEN: usize = 128;
-const STDOUT_CAP: u64 = 16 * 1024;
-const STDERR_CAP: u64 = 1024;
+const STDOUT_CAP: usize = 16 * 1024;
+const STDERR_CAP: usize = 1024;
 const STATE_MAX_CHARS: usize = 48;
 const DETAIL_MAX_BYTES: usize = 4 * 1024;
 const DETAIL_MAX_LINES: usize = 64;
 const MAX_CONCURRENT: usize = 4;
 const POLL_STEP: Duration = Duration::from_millis(20);
 const READER_GRACE: Duration = Duration::from_millis(200);
+#[cfg(windows)]
+const TASKKILL_WAIT: Duration = Duration::from_secs(2);
 
 // ---------------------------------------------------------------- config
 
@@ -521,33 +523,115 @@ fn minimal_env(cmd: &mut Command, program: &Path) {
     }
 }
 
-/// Read up to `cap` bytes, then keep draining so the child never blocks on a full pipe.
-fn spawn_reader(src: Option<impl Read + Send + 'static>, cap: u64) -> mpsc::Receiver<Vec<u8>> {
-    let (tx, rx) = mpsc::channel();
-    if let Some(src) = src {
-        std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            let mut limited = src.take(cap);
-            let _ = limited.read_to_end(&mut buf);
-            let _ = io::copy(&mut limited.into_inner(), &mut io::sink());
-            let _ = tx.send(buf);
-        });
-    }
-    rx
+/// Output read so far, available before the pipe closes.
+struct Reader {
+    buf: Arc<Mutex<Vec<u8>>>,
+    done: mpsc::Receiver<()>,
 }
 
+impl Reader {
+    /// True once the pipe has closed, waiting at most until `deadline`.
+    fn closed_by(&self, deadline: Instant) -> bool {
+        let left = deadline.saturating_duration_since(Instant::now());
+        !matches!(
+            self.done.recv_timeout(left),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        )
+    }
+
+    fn take(&self) -> Vec<u8> {
+        std::mem::take(&mut *self.buf.lock())
+    }
+}
+
+/// Keep up to `cap` bytes as they arrive, then keep draining so the child never
+/// blocks on a full pipe.
+fn spawn_reader(src: Option<impl Read + Send + 'static>, cap: usize) -> Reader {
+    let buf = Arc::new(Mutex::new(Vec::new()));
+    let (tx, done) = mpsc::channel();
+    if let Some(mut src) = src {
+        let shared = Arc::clone(&buf);
+        std::thread::spawn(move || {
+            let mut chunk = [0u8; 4096];
+            loop {
+                match src.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let mut kept = shared.lock();
+                        let room = cap.saturating_sub(kept.len());
+                        kept.extend_from_slice(&chunk[..n.min(room)]);
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                    Err(_) => break,
+                }
+            }
+            let _ = tx.send(());
+        });
+    }
+    Reader { buf, done }
+}
+
+/// SIGKILL the process group the child led. The group outlives its leader while
+/// any member exists, and its id cannot be reused while it exists.
+#[cfg(unix)]
+fn kill_group(child: &Child) {
+    if let Ok(pid) = i32::try_from(child.id()) {
+        // SAFETY: plain syscall; a negative pid addresses the group we created.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+}
+
+/// Ends the whole tree of a child that is still running.
 fn kill_tree(child: &mut Child) {
+    // The child leads its own process group, so this also ends its helpers.
     #[cfg(unix)]
+    kill_group(child);
+    // Windows has no group to signal: taskkill /T walks the child's descendants.
+    // The child still runs and we hold its handle, so its PID is not reused.
+    #[cfg(windows)]
     {
-        // The child leads its own process group, so this also ends its helpers.
-        if let Ok(pid) = i32::try_from(child.id()) {
-            // SAFETY: plain syscall; a negative pid addresses the group we created.
-            unsafe {
-                libc::kill(-pid, libc::SIGKILL);
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let root = std::env::var_os("SYSTEMROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+        let spawned = Command::new(root.join("System32").join("taskkill.exe"))
+            .args(["/T", "/F", "/PID", &child.id().to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+        if let Ok(mut taskkill) = spawned {
+            let deadline = Instant::now() + TASKKILL_WAIT;
+            loop {
+                match taskkill.try_wait() {
+                    Ok(None) if Instant::now() < deadline => std::thread::sleep(POLL_STEP),
+                    Ok(None) => {
+                        let _ = taskkill.kill();
+                        let _ = taskkill.wait();
+                        break;
+                    }
+                    _ => break,
+                }
             }
         }
     }
     let _ = child.kill();
+}
+
+/// The program has exited but something it started still holds its output open.
+fn end_stragglers(child: &Child) {
+    #[cfg(unix)]
+    kill_group(child);
+    // Windows: left alone. There is no group whose id stays reserved, and after
+    // the program exits taskkill /T can only follow parent-PID links, which can
+    // point at a reused PID. The output read so far is still returned; the
+    // reader thread ends when the last holder closes the pipe.
+    #[cfg(not(unix))]
+    let _ = child;
 }
 
 fn execute(program: &str, argv: &[String], timeout: Duration, parse: &Parse) -> RefResult {
@@ -572,8 +656,8 @@ fn execute(program: &str, argv: &[String], timeout: Duration, parse: &Parse) -> 
             return r;
         }
     };
-    let out_rx = spawn_reader(child.stdout.take(), STDOUT_CAP);
-    let err_rx = spawn_reader(child.stderr.take(), STDERR_CAP);
+    let out = spawn_reader(child.stdout.take(), STDOUT_CAP);
+    let err = spawn_reader(child.stderr.take(), STDERR_CAP);
     let deadline = started + timeout;
     let exit = loop {
         match child.try_wait() {
@@ -588,9 +672,16 @@ fn execute(program: &str, argv: &[String], timeout: Duration, parse: &Parse) -> 
         kill_tree(&mut child);
         let _ = child.wait();
     }
-    // A helper outside the group (Windows) could hold the pipe open; never wait on it for long.
-    let stdout = out_rx.recv_timeout(READER_GRACE).unwrap_or_default();
-    let stderr = err_rx.recv_timeout(READER_GRACE).unwrap_or_default();
+    // A descendant can keep the pipes open after the program exits: take what was
+    // read, and end the group so the descendants and the reader threads finish.
+    let grace = Instant::now() + READER_GRACE;
+    if !(out.closed_by(grace) && err.closed_by(grace)) {
+        end_stragglers(&child);
+        let grace = Instant::now() + READER_GRACE;
+        let _ = out.closed_by(grace) && err.closed_by(grace);
+    }
+    let stdout = out.take();
+    let stderr = err.take();
     let ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     if timed_out {
         let mut r = RefResult::bare(RefStatus::Timeout, None, "timeout");
@@ -644,12 +735,20 @@ fn read_config(path: &Path) -> Result<LiveRefsConfig, String> {
     serde_json::from_str(&raw).map_err(|e| format!("{FILE_NAME}: {e}"))
 }
 
-fn write_config(path: &Path, config: &LiveRefsConfig) -> Result<(), String> {
+/// The file body, refused when `read_config` would reject it at the next start.
+fn config_body(config: &LiveRefsConfig) -> Result<Vec<u8>, String> {
+    let body = serde_json::to_vec_pretty(config).map_err(|e| e.to_string())?;
+    if u64::try_from(body.len()).unwrap_or(u64::MAX) > MAX_FILE_BYTES {
+        return Err("too much to save: use fewer or shorter commands".to_string());
+    }
+    Ok(body)
+}
+
+fn write_config(path: &Path, body: &[u8]) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let body = serde_json::to_vec_pretty(config).map_err(|e| e.to_string())?;
-    crate::atomic_write::write_atomic(path, &body).map_err(|e| e.to_string())?;
+    crate::atomic_write::write_atomic(path, body).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -781,6 +880,7 @@ pub async fn live_refs_save(
         kinds: config.kinds,
     };
     let compiled = compile(&config, true)?;
+    let body = config_body(&config)?;
     // The native dialog blocks, so all of this runs off the main thread; the
     // lock keeps the compare-ask-write sequence from interleaving with another save.
     tauri::async_runtime::spawn_blocking(move || {
@@ -792,7 +892,7 @@ pub async fn live_refs_save(
         if !items.is_empty() && !ask_approval(&app, &items) {
             return Err("not approved".to_string());
         }
-        write_config(&path, &config)?;
+        write_config(&path, &body)?;
         *state.kinds.lock() = Some(compiled);
         let _ = app.emit("live-refs-changed", ());
         Ok(config)
@@ -869,6 +969,7 @@ fn find_program_in(name: &str, dirs: &[PathBuf]) -> Option<String> {
         vec![name.to_string()]
     };
     dirs.iter()
+        .filter(|d| d.is_absolute())
         .flat_map(|d| names.iter().map(move |n| d.join(n)))
         .find(|p| is_executable(p))
         .map(|p| p.to_string_lossy().into_owned())
@@ -1296,6 +1397,78 @@ mod tests {
         assert_eq!(
             find_program_in("sh", &[PathBuf::from("/bin")]).as_deref(),
             Some("/bin/sh")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn find_program_skips_relative_and_empty_path_entries() {
+        // A relative entry that reaches /bin from the test's working directory.
+        let depth = std::env::current_dir().unwrap().components().count() - 1;
+        let rel: PathBuf = std::iter::repeat_n("..", depth)
+            .collect::<PathBuf>()
+            .join("bin");
+        assert!(
+            is_executable(&rel.join("sh")),
+            "setup: {rel:?} reaches /bin"
+        );
+        let dirs = [PathBuf::new(), rel.clone(), PathBuf::from("/bin")];
+        assert_eq!(find_program_in("sh", &dirs).as_deref(), Some("/bin/sh"));
+        assert!(find_program_in("sh", &[PathBuf::new(), rel]).is_none());
+    }
+
+    #[test]
+    fn save_refuses_a_body_the_next_start_would_reject() {
+        let long = "a".repeat(MAX_ARG_LEN);
+        let big = cfg((0..MAX_KINDS)
+            .map(|i| Kind {
+                name: format!("k{i}"),
+                args: vec![long.clone(); MAX_ARGS],
+                ..kind("a", "/bin/echo", &[])
+            })
+            .collect());
+        // Within every per-kind limit, yet over the file limit.
+        assert!(compile(&big, false).is_ok());
+        assert!(config_body(&big).is_err());
+        let body = config_body(&cfg(vec![named("a")])).unwrap();
+        assert!(u64::try_from(body.len()).unwrap() <= MAX_FILE_BYTES);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_returns_and_group_ends_when_a_helper_keeps_the_pipe_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("pid");
+        // The background sleep inherits stdout and outlives the shell.
+        let script = format!("echo hi; /bin/sleep 30 & echo $! > {}", pidfile.display());
+        let started = Instant::now();
+        let r = execute(
+            "/bin/sh",
+            &["-c".into(), script],
+            Duration::from_secs(5),
+            &Parse::Text,
+        );
+        assert_eq!((r.status, r.state.as_str()), (RefStatus::Ok, "hi"));
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            started.elapsed()
+        );
+        let pid: i32 = std::fs::read_to_string(&pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        // Killed, then reaped by init: wait until the pid is gone.
+        let gone_by = Instant::now() + Duration::from_secs(2);
+        // SAFETY: signal 0 only checks existence.
+        while unsafe { libc::kill(pid, 0) } == 0 && Instant::now() < gone_by {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        // SAFETY: as above.
+        assert!(
+            unsafe { libc::kill(pid, 0) } != 0,
+            "background sleep survived"
         );
     }
 }
