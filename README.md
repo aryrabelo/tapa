@@ -90,6 +90,29 @@ of the usual web-app weight.
 > streams matches from Rust grouped by file; press `Enter` on a match to jump
 > straight to that line.
 
+### Live references (plugin, off by default)
+
+Write a reference to one of your coding agents in a note and Tapa shows its
+state right after it, kept current while the note is open. With the
+**bora pane** preset in Settings → Plugins → Live references, both of these
+work and show the pane's status (`working`, `idle`, `done`, …):
+
+```markdown
+[herdr-openrig w1BA:p1]
+[w1BA:p1]
+```
+
+The words before the pane id are just a label for you; only the id reaches the
+command (`bora pane get w1BA:p1`). Hover the chip to see the command's output,
+capped at 4 KB, or for JSON output the detail field you set.
+
+Safety: a note can only name a reference, never a command. Commands are defined
+in Settings and Tapa asks you in a native dialog before saving a new or changed
+one; it runs the program directly (no shell), with a time limit, and only the
+parts of the reference your pattern picks out are passed, as separate checked
+arguments. The output is shown as plain text and nothing is written into the
+note.
+
 ## ⌨️ Keyboard shortcuts
 
 | Shortcut | Action |
@@ -224,9 +247,11 @@ Tapa is a thin native shell around a web frontend:
 - **Frontend** — React 19 + Vite, Tailwind v4 + shadcn tokens. Markdown is
   rendered in JS with `react-markdown` (remark/GFM); editing uses CodeMirror 6.
 - **Backend** — Rust (Tauri v2) handles I/O: folder scan, file read/write, and
-  a filesystem watcher for live reload. The one exception is the optional AI
-  suggestions: Rust holds the API key in the OS keychain and sends the request
-  itself, so the key never reaches the webview.
+  a filesystem watcher for live reload. There are two exceptions, both on
+  purpose. The optional AI suggestions: Rust holds the API key in the OS
+  keychain and sends the request itself, so the key never reaches the webview.
+  And live references, whose matching, checks and command running live in Rust
+  as the safety boundary between a note and your machine.
 - **Startup budget** — the boot bundle is aggressively code-split. The editor
   (CodeMirror), the Markdown renderer, the command palette, the sidebar, and
   toasts each load on demand instead of at startup. The result: the eager bundle

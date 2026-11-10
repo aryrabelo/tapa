@@ -6,6 +6,7 @@ mod commands;
 mod default_handler;
 mod file_ops;
 pub mod fs_tree;
+mod live_refs;
 mod menu;
 pub mod search;
 mod teleprompter;
@@ -55,6 +56,7 @@ pub fn run() {
         .manage(watcher::WatchState::default())
         .manage(commands::PendingOpen::default())
         .manage(ai::AiState::default())
+        .manage(live_refs::LiveRefsState::default())
         .invoke_handler(tauri::generate_handler![
             commands::scan_tree,
             commands::read_file,
@@ -79,7 +81,12 @@ pub fn run() {
             ai::ai_save_settings,
             ai::ai_set_key,
             ai::ai_clear_key,
-            ai::ai_complete
+            ai::ai_complete,
+            live_refs::live_refs_config,
+            live_refs::live_refs_save,
+            live_refs::live_refs_resolve,
+            live_refs::live_refs_run,
+            live_refs::live_refs_find_program
         ])
         .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .build(tauri::generate_context!())

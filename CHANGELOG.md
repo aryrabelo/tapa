@@ -19,6 +19,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Only the text around the caret (about 1,500 characters before, 300 after)
   is sent, and nothing is sent while it is off. Defaults: `gpt-6-luna` and
   `claude-haiku-5-5`, or any model you name.
+- **Live references** (plugin, off by default): write `[herdr-openrig w1BA:p1]`
+  or `[w1BA:p1]` in a note and a chip after it shows that agent's state, kept
+  current while the note is open and visible; hover it for the command's output
+  (capped at 4 KB), or for JSON output the detail field you set.
+  Commands are set in Settings (with a **bora pane** preset) and Tapa asks in a
+  native dialog before saving a new or changed one. A note can only name a
+  reference; the program runs without a shell, with a time limit, and only the
+  checked parts of the reference are passed as arguments. Output is plain text
+  and nothing is written into the note.
 
 ### Changed
 - Autocomplete now also learns from your other open files and your recent

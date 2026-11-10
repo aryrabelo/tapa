@@ -73,6 +73,43 @@ export const aiClearKey = (): Promise<AiStatus> => invoke<AiStatus>("ai_clear_ke
 export const aiComplete = (before: string, after: string): Promise<string | null> =>
   invoke<string | null>("ai_complete", { before, after });
 
+/** One kind of live reference, as stored by Rust in `live-refs.json`. */
+export interface LiveRefKind {
+  name: string;
+  match: string;
+  program: string;
+  args: string[];
+  intervalSec: number;
+  timeoutMs: number;
+  parse: "text" | { json: { status: string; detail?: string; error?: string } };
+  enabled: boolean;
+}
+export interface LiveRefsConfig {
+  version: number;
+  kinds: LiveRefKind[];
+}
+export type LiveRefStatus = "ok" | "error" | "timeout" | "unknown_ref" | "invalid_arg" | "busy";
+export interface LiveRefResult {
+  status: LiveRefStatus;
+  name: string | null;
+  state: string;
+  detail: string;
+  exitCode: number | null;
+  ms: number;
+}
+export type LiveRefResolved = { name: string; intervalSec: number } | null;
+export const liveRefsConfig = (): Promise<LiveRefsConfig> =>
+  invoke<LiveRefsConfig>("live_refs_config");
+/** Rust asks the human in a native dialog before saving a new or changed command. */
+export const liveRefsSave = (config: LiveRefsConfig): Promise<LiveRefsConfig> =>
+  invoke<LiveRefsConfig>("live_refs_save", { config });
+export const liveRefsResolve = (texts: string[]): Promise<LiveRefResolved[]> =>
+  invoke<LiveRefResolved[]>("live_refs_resolve", { texts });
+export const liveRefsRun = (text: string): Promise<LiveRefResult> =>
+  invoke<LiveRefResult>("live_refs_run", { text });
+export const liveRefsFindProgram = (name: string): Promise<string | null> =>
+  invoke<string | null>("live_refs_find_program", { name });
+
 /** Native yes/no warning. Resolves true when the user picks `okLabel`. */
 export const confirmAction = (message: string, title: string, okLabel: string): Promise<boolean> =>
   ask(message, { title, kind: "warning", okLabel, cancelLabel: "Cancel" });

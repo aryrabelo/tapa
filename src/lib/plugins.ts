@@ -1,6 +1,7 @@
 // Plugin manifest. Core plugins (no `defaultEnabled`) are always on. The rest
 // are official plugins the user turns on or off in Settings. Each `load` is a
 // dynamic import, so a plugin's code arrives only when it is actually used.
+import type { ComponentType } from "react";
 import type { Module } from "@/lib/registry";
 import { registry } from "@/lib/registry";
 
@@ -31,6 +32,8 @@ export interface PluginManifest {
    */
   toggle?: { title: string; keybinding: string };
   config?: ConfigField[];
+  /** A Settings section of its own, loaded only while the plugin is on. */
+  settings?: () => Promise<{ default: ComponentType }>;
   load: () => Promise<Module>;
 }
 
@@ -137,6 +140,17 @@ export const PLUGINS: readonly PluginManifest[] = [
     keys: "⌘⇧G / ⌘⇧R",
     defaultEnabled: true,
     load: () => import("@/modules/changes").then((m) => m.changesModule),
+  },
+  {
+    id: "live-refs",
+    label: "Live references",
+    blurb:
+      "Shows the state of your agents next to a reference like [w1BA:p1], using a command you approve here.",
+    defaultEnabled: false,
+    editor: true,
+    eager: true,
+    settings: () => import("@/modules/live-refs/LiveRefsSettings"),
+    load: () => import("@/modules/live-refs").then((m) => m.liveRefsModule),
   },
 ];
 
