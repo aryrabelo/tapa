@@ -151,7 +151,7 @@ describe("autocomplete plugin", () => {
     expect(readFile).toHaveBeenCalledWith("/gone.md");
   });
 
-  it("drops a load that finishes after the folder changed", async () => {
+  it("lets a slow load finish before starting the one for the folder it was switched to", async () => {
     // ES2022 lib: no Promise.withResolvers.
     let finishSlow: (text: string) => void = () => {};
     const slow = new Promise<string>((resolve) => {
@@ -165,12 +165,105 @@ describe("autocomplete plugin", () => {
     expect(readFile).toHaveBeenCalledWith("/slow/x.md");
 
     useStore.setState({ root: "/elsewhere", files: ["b.md"] });
-    await vi.waitFor(() => expect(ghost()).toBe("ocantins."));
+    ghost(); // the next edit/caret move is what notices the rescan
+    // The slow load has not landed yet, so no second load has started: it is
+    // allowed to finish first, not cancelled.
+    expect(readFile).not.toHaveBeenCalledWith("/elsewhere/b.md");
 
-    // The old folder's read comes back last; it must not replace the new corpus.
     finishSlow("o rio Tapajós.");
-    // The stale load settles through microtasks only; one macrotask turn drains them all.
-    await new Promise((r) => setTimeout(r, 0));
-    expect(ghost()).toBe("ocantins.");
+    await vi.waitFor(() => expect(readFile).toHaveBeenCalledWith("/elsewhere/b.md"));
+    await vi.waitFor(() => expect(ghost()).toBe("ocantins."));
+  });
+
+  it("a rescan that lists the same files in a new array changes nothing", async () => {
+    const { ghost } = await typedEditor();
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+    vi.mocked(readFile).mockClear();
+
+    // What `setFolder` builds on every rescan, even when nothing changed on disk.
+    useStore.setState({ files: [...useStore.getState().files] });
+    expect(ghost()).toBe("apajós.");
+    expect(readFile).not.toHaveBeenCalled();
+  });
+
+  it("keeps serving the loaded corpus while an added file loads, then folds it in", async () => {
+    const { ghost } = await typedEditor();
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+    vi.mocked(readFile).mockClear();
+
+    let finishExtra: (text: string) => void = () => {};
+    const slowExtra = new Promise<string>((resolve) => {
+      finishExtra = resolve;
+    });
+    vi.mocked(readFile).mockImplementation((path) =>
+      path === "/vault/extra.md" ? slowExtra : fromDisk(path),
+    );
+    useStore.setState({ files: ["open.md", "other.md", "extra.md"] });
+    ghost(); // the next edit/caret move is what notices the rescan
+
+    await vi.waitFor(() => expect(readFile).toHaveBeenCalledWith("/vault/extra.md"));
+    // Still serving the old corpus while the new file loads, and the file
+    // already in it is reused from cache, not read again.
+    expect(ghost()).toBe("apajós.");
+    expect(readFile).not.toHaveBeenCalledWith("/vault/other.md");
+
+    finishExtra("Vi o rio Trombetas. Vi o rio Trombetas.");
+    await vi.waitFor(() => expect(ghost()).toBe("rombetas."));
+  });
+
+  it("stops suggesting a removed file once the reload for the shorter list lands", async () => {
+    vi.mocked(readFile).mockImplementation((path) =>
+      path === "/vault/extra2.md"
+        ? Promise.resolve("Vi o rio Trombetas. Vi o rio Trombetas.")
+        : fromDisk(path),
+    );
+    useStore.setState({ files: ["open.md", "other.md", "extra2.md"] });
+    const { ghost } = await typedEditor();
+    await vi.waitFor(() => expect(ghost()).toBe("rombetas."));
+
+    useStore.setState({ files: ["open.md", "other.md"] }); // extra2.md dropped
+    // The reload for the shorter list has not landed yet; the old (longer)
+    // corpus still answers until it does.
+    expect(ghost()).toBe("rombetas.");
+
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+  });
+
+  it("coalesces several list changes while a load is pending into at most one more load", async () => {
+    let finishSlow: (text: string) => void = () => {};
+    const slow = new Promise<string>((resolve) => {
+      finishSlow = resolve;
+    });
+    vi.mocked(readFile).mockImplementation((path) =>
+      path === "/slow/x.md" ? slow : fromDisk(path),
+    );
+    useStore.setState({ root: "/slow", files: ["x.md"], activePath: null });
+    const { ghost } = await typedEditor();
+    expect(readFile).toHaveBeenCalledTimes(1);
+
+    // Three changes land while the first load is still in flight; only the
+    // last one may ever start a second load.
+    useStore.setState({ root: "/elsewhere", files: ["b.md"] });
+    ghost();
+    useStore.setState({ root: "/elsewhere", files: ["b.md", "c.md"] });
+    ghost();
+    useStore.setState({ root: "/vault", files: ["other.md"], activePath: null });
+    ghost();
+    expect(readFile).toHaveBeenCalledTimes(1); // still only the first, slow load
+
+    finishSlow("o rio Tapajós.");
+    await vi.waitFor(() => expect(readFile).toHaveBeenCalledTimes(2));
+    expect(readFile).toHaveBeenCalledWith("/vault/other.md");
+    expect(readFile).not.toHaveBeenCalledWith("/elsewhere/b.md");
+    expect(readFile).not.toHaveBeenCalledWith("/elsewhere/c.md");
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+  });
+
+  it("drops the old folder's text once a load for the new root lands", async () => {
+    const { ghost } = await typedEditor();
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+
+    useStore.setState({ root: "/elsewhere", files: ["b.md"], activePath: null });
+    await vi.waitFor(() => expect(ghost()).toBe("ocantins."));
   });
 });
