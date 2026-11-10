@@ -118,7 +118,6 @@ describe("tapaIndentMore / tapaIndentLess", () => {
     expect(text(v)).toBe("```js\nfoo    \n```\n");
   });
 
-
   it("indents every selected line by two spaces inside a fenced code block", () => {
     const doc = "```js\none\ntwo\n```\n";
     const v = mount(doc, doc.indexOf("one"));
@@ -164,13 +163,21 @@ describe("tapaIndentMore / tapaIndentLess", () => {
 
   it("accepts a visible ghost suggestion on Tab, and indents when there is none", () => {
     const doc = "- a\n- bol\n";
-    const v = mount(doc, doc.indexOf("bol") + 3, ghostText(() => ["bold move"]));
+    const v = mount(
+      doc,
+      doc.indexOf("bol") + 3,
+      ghostText(() => ["bold move"]),
+    );
     // The caret is right after "bol", which continues a note's "bold move": a ghost shows.
     expect(press(v, "Tab")).toBe(true);
     expect(text(v)).toContain("bold move");
 
     // No matching note: no ghost, so Tab falls through to the list-indent command.
-    const v2 = mount("- a\n- b\n", "- a\n- b\n".indexOf("b"), ghostText(() => []));
+    const v2 = mount(
+      "- a\n- b\n",
+      "- a\n- b\n".indexOf("b"),
+      ghostText(() => []),
+    );
     expect(press(v2, "Tab")).toBe(true);
     expect(text(v2)).toBe("- a\n  - b\n");
   });

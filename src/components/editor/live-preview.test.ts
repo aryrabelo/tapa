@@ -239,15 +239,11 @@ describe("livePreview buildDecorations", () => {
     const urlFrom = doc.indexOf("https://example.com");
     const urlTo = urlFrom + "https://example.com".length;
     const v = view(doc, 0); // cursor on line 1; the link is on line 2 (inactive)
-    const hiddenOff = collect(v).find(
-      (h) => h.isReplace && h.from === urlFrom && h.to === urlTo,
-    );
+    const hiddenOff = collect(v).find((h) => h.isReplace && h.from === urlFrom && h.to === urlTo);
     expect(hiddenOff).toBeDefined();
 
     v.dispatch({ selection: { anchor: urlFrom } }); // caret moves onto the link's line
-    const hiddenOn = collect(v).find(
-      (h) => h.isReplace && h.from === urlFrom && h.to === urlTo,
-    );
+    const hiddenOn = collect(v).find((h) => h.isReplace && h.from === urlFrom && h.to === urlTo);
     expect(hiddenOn).toBeUndefined();
   });
 
