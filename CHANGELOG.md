@@ -51,6 +51,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Updated the XML reader used when Tapa reads its own app bundle information
   (quick-xml, through plist), fixing two advisories where a crafted file could
   use up memory or time.
+- Updated the library the updater uses to unpack downloaded updates (zip,
+  through the Tauri updater plugin), fixing four published advisories,
+  including a critical one where a crafted archive could use a link to change
+  the permissions of files outside the folder it was unpacked into.
 
 ## [0.8.0] - 2026-10-26
 
