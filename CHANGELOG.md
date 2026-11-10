@@ -43,6 +43,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   files in the folder keep changing (for example while an AI agent or Git is
   working there).
 
+### Security
+- Updated the secure-connection library (rustls and its certificate checks)
+  behind AI suggestions and update checks, fixing several published
+  advisories, including one where a certificate from a distrusted authority
+  could be accepted.
+- Updated the XML reader used when Tapa reads its own app bundle information
+  (quick-xml, through plist), fixing two advisories where a crafted file could
+  use up memory or time.
+
 ## [0.8.0] - 2026-10-26
 
 ### Added
