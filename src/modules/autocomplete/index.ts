@@ -91,11 +91,41 @@ function corpusNotes(getState: ModuleContext["getState"]) {
     });
   };
 
+  let lastRoot: string | null = null;
+  let lastSingle = false;
+  let lastFiles: readonly string[] | null = null;
+  let lastOpenFiles: readonly string[] | null = null;
+  let lastActivePath: string | null = null;
+  let lastRecent: readonly string[] | null = null;
+
   const refresh = () => {
     const state = getState();
     const recent = getRecents();
+    // Cheap O(1) guard: most calls (every keystroke/caret move) land here
+    // with nothing changed, so corpusPaths's O(files) walk never runs.
+    if (
+      state.root === lastRoot &&
+      state.single === lastSingle &&
+      state.files === lastFiles &&
+      state.openFiles === lastOpenFiles &&
+      state.activePath === lastActivePath &&
+      recent === lastRecent
+    ) {
+      return;
+    }
+    lastRoot = state.root;
+    lastSingle = state.single;
+    lastFiles = state.files;
+    lastOpenFiles = state.openFiles;
+    lastActivePath = state.activePath;
+    lastRecent = recent;
+
     const paths = corpusPaths(state, recent);
-    if (samePaths(paths, appliedPaths) || samePaths(paths, pendingPaths)) return;
+    if (samePaths(paths, appliedPaths)) return;
+    if (samePaths(paths, pendingPaths)) {
+      queuedPaths = null; // back to what's already loading: drop a stale queue
+      return;
+    }
     if (paths.length === 0) {
       generation++; // cancels any read in flight; nothing left to learn from
       pendingPaths = null;

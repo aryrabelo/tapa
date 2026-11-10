@@ -259,6 +259,34 @@ describe("autocomplete plugin", () => {
     await vi.waitFor(() => expect(ghost()).toBe("apajós."));
   });
 
+  it("drops a queued list when the state returns to what is already pending", async () => {
+    let finishSlow: (text: string) => void = () => {};
+    const slow = new Promise<string>((resolve) => {
+      finishSlow = resolve;
+    });
+    vi.mocked(readFile).mockImplementation((path) =>
+      path === "/slow/x.md" ? slow : fromDisk(path),
+    );
+    useStore.setState({ root: "/slow", files: ["x.md"], activePath: null });
+    const { ghost } = await typedEditor();
+    expect(readFile).toHaveBeenCalledTimes(1);
+    expect(readFile).toHaveBeenCalledWith("/slow/x.md");
+
+    // Change away (queues a second list), then back to the one already loading.
+    useStore.setState({ root: "/elsewhere", files: ["b.md"] });
+    ghost();
+    useStore.setState({ root: "/slow", files: ["x.md"], activePath: null });
+    ghost();
+    expect(readFile).not.toHaveBeenCalledWith("/elsewhere/b.md");
+
+    finishSlow("o rio Tapajós.");
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+    // No second load ever started: the queued "/elsewhere/b.md" list was
+    // dropped the moment the state returned to what was already pending.
+    expect(readFile).toHaveBeenCalledTimes(1);
+    expect(readFile).not.toHaveBeenCalledWith("/elsewhere/b.md");
+  });
+
   it("drops the old folder's text once a load for the new root lands", async () => {
     const { ghost } = await typedEditor();
     await vi.waitFor(() => expect(ghost()).toBe("apajós."));
