@@ -38,10 +38,18 @@ regex = "1"
 memchr = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+# HTTP for the optional AI continuation (and dev-capture's token mint). The
+# updater already pulls reqwest + rustls/ring with these features, so naming
+# them here adds no crate. TLS uses the ring provider installed at startup.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+# The AI key lives in the OS keychain. Each feature is gated to its OS inside
+# keyring: macOS uses security-framework (already in the tree via reqwest),
+# Windows the Credential Manager, Linux the Secret Service over the dbus crate
+# tao already links.
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 # Bug-capture only (`--features dev-capture`). A normal build does not compile
-# the AssemblyAI mint. reqwest may still arrive transitively via the updater.
-reqwest = { version = "0.13", default-features = false, optional = true }
-rustls = { version = "0.23", default-features = false, features = ["ring"], optional = true }
+# the AssemblyAI mint.
 # Load `.env` so the native token mint can read ASSEMBLYAI_API_KEY from the
 # host environment — the key is never exposed to the webview bundle.
 dotenvy = { version = "0.15", optional = true }
@@ -65,7 +73,7 @@ libc = "0.2"
 
 [features]
 default = []
-dev-capture = ["dep:reqwest", "dep:rustls", "dep:dotenvy"]
+dev-capture = ["dep:dotenvy"]
 
 [dev-dependencies]
 tempfile = "3"

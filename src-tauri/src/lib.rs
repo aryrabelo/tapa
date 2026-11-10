@@ -1,3 +1,4 @@
+mod ai;
 mod atomic_write;
 mod brain;
 mod changes;
@@ -13,9 +14,9 @@ mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // dev-capture only. ring is not a default rustls provider, so install it
-    // once or building the token client panics. Err means it is already installed.
-    #[cfg(feature = "dev-capture")]
+    // reqwest is built without a default TLS provider (the updater picks ring),
+    // so install ring once for every client: the AI continuation, the updater
+    // and dev-capture. Err means it is already installed.
     let _ = rustls::crypto::ring::default_provider().install_default();
     // Load `.env` into the process environment so the native token mint can read
     // ASSEMBLYAI_API_KEY. The key stays server-side and never reaches the webview.
@@ -54,6 +55,7 @@ pub fn run() {
         })
         .manage(watcher::WatchState::default())
         .manage(commands::PendingOpen::default())
+        .manage(ai::AiState::default())
         .manage(live_refs::LiveRefsState::default())
         .invoke_handler(tauri::generate_handler![
             commands::scan_tree,
@@ -75,6 +77,11 @@ pub fn run() {
             file_ops::trash_path,
             file_ops::reveal_path,
             file_ops::path_kind,
+            ai::ai_status,
+            ai::ai_save_settings,
+            ai::ai_set_key,
+            ai::ai_clear_key,
+            ai::ai_complete,
             live_refs::live_refs_config,
             live_refs::live_refs_save,
             live_refs::live_refs_resolve,

@@ -33,6 +33,46 @@ export type PathKind = "file" | "dir" | "missing";
 export const pathKind = (path: string): Promise<PathKind> =>
   invoke<PathKind>("path_kind", { path });
 
+// Optional AI continuation. The key goes into the OS keychain from Rust and is
+// never sent back; the webview only learns whether one is saved.
+export type AiProvider = "openai" | "anthropic";
+export interface AiStatus {
+  enabled: boolean;
+  provider: AiProvider;
+  /** Blank means the provider's default model. */
+  model: string;
+  hasKey: boolean;
+  /** The keychain could not be read, so whether a key is saved is unknown. */
+  keychainUnavailable: boolean;
+  defaultModels: Record<AiProvider, string>;
+}
+/** Why `aiComplete` failed, as sent by Rust. */
+export type AiError =
+  | {
+      kind:
+        | "off"
+        | "noKey"
+        | "badKey"
+        | "rateLimited"
+        | "timeout"
+        | "network"
+        | "badResponse"
+        | "keychain"
+        | "config";
+    }
+  | { kind: "provider"; status: number };
+export const aiStatus = (): Promise<AiStatus> => invoke<AiStatus>("ai_status");
+export const aiSaveSettings = (s: {
+  enabled: boolean;
+  provider: AiProvider;
+  model: string;
+}): Promise<AiStatus> => invoke<AiStatus>("ai_save_settings", s);
+export const aiSetKey = (key: string): Promise<AiStatus> => invoke<AiStatus>("ai_set_key", { key });
+export const aiClearKey = (): Promise<AiStatus> => invoke<AiStatus>("ai_clear_key");
+/** One short continuation of the text at the caret, or null. Rejects with an `AiError`. */
+export const aiComplete = (before: string, after: string): Promise<string | null> =>
+  invoke<string | null>("ai_complete", { before, after });
+
 /** One kind of live reference, as stored by Rust in `live-refs.json`. */
 export interface LiveRefKind {
   name: string;

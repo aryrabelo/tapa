@@ -67,6 +67,16 @@ of the usual web-app weight.
   and **Undo**; the bar on top has **Keep all**, **Undo all** and **Done**.
   Undo is a normal edit (`⌘Z` brings the text back); Keep never touches the
   file or Git.
+- **Autocomplete** — finishes what you are typing in gray from your other
+  notes; `Tab` keeps it, `Esc` hides it. Local only.
+- **AI suggestions (optional, off by default)** — when your notes have nothing
+  to offer and you pause, Tapa can ask OpenAI or Anthropic for one short
+  sentence, with **your own API key**. Turn it on in Settings. The key goes
+  into the system keychain (never into the app's storage, never shown again)
+  and the request is made by the Rust side. Only the text around the caret is
+  sent (about 1,500 characters before it, 300 after); nothing is sent while it
+  is off. Default models: `gpt-6-luna` (OpenAI) and `claude-haiku-5-5`
+  (Anthropic).
 - **Live reload** — external changes on disk reload automatically; if you have
   unsaved edits, Tapa asks before discarding them.
 - **OS-native theme** — follows your system light/dark appearance, with a manual
@@ -121,6 +131,7 @@ note.
 | `⌘⇧D` / `Ctrl-Shift-D` | Focus mode |
 | `⌘⇧G` / `Ctrl-Shift-G` | Show what changed in the note |
 | `⌘⇧R` / `Ctrl-Shift-R` | Review the changes in the text (Keep / Undo each one) |
+| `Tab` / `Shift-Tab` | Nest / un-nest a list item; indent / un-indent inside a code block |
 
 Almost every command is also in the menu bar (File, Edit, View, Help).
 
@@ -235,10 +246,12 @@ Tapa is a thin native shell around a web frontend:
 
 - **Frontend** — React 19 + Vite, Tailwind v4 + shadcn tokens. Markdown is
   rendered in JS with `react-markdown` (remark/GFM); editing uses CodeMirror 6.
-- **Backend** — Rust (Tauri v2) handles I/O: folder scan, file read/write,
-  and a filesystem watcher for live reload. The one exception is live
-  references, whose matching, checks and command running live in Rust on
-  purpose, as the safety boundary between a note and your machine.
+- **Backend** — Rust (Tauri v2) handles I/O: folder scan, file read/write, and
+  a filesystem watcher for live reload. There are two exceptions, both on
+  purpose. The optional AI suggestions: Rust holds the API key in the OS
+  keychain and sends the request itself, so the key never reaches the webview.
+  And live references, whose matching, checks and command running live in Rust
+  as the safety boundary between a note and your machine.
 - **Startup budget** — the boot bundle is aggressively code-split. The editor
   (CodeMirror), the Markdown renderer, the command palette, the sidebar, and
   toasts each load on demand instead of at startup. The result: the eager bundle

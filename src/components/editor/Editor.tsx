@@ -4,6 +4,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { useEffect, useRef } from "react";
+import { indentKeymap } from "@/components/editor/indent";
 import { editorPluginCompartment } from "@/lib/editor-extensions";
 import { attachEditorView } from "@/lib/editor-view";
 import { bootEditorPlugins } from "@/lib/plugins";
@@ -56,6 +57,7 @@ export function Editor({ doc, cursor, onChange, onSave, onBlurSave }: Props): Re
                 return true;
               },
             },
+            ...indentKeymap,
             ...defaultKeymap,
             ...historyKeymap,
           ]),
