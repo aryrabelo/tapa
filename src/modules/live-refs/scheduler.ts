@@ -2,8 +2,10 @@ import type { LiveRefResult } from "@/lib/tauri";
 
 /** At most this many distinct references per note are polled. */
 export const MAX_KEYS = 20;
-/** Failures double the wait up to this. */
+/** Failures double the wait up to this, never below the interval. */
 export const MAX_BACKOFF_MS = 5 * 60_000;
+/** Remembered answers across all notes. */
+export const MAX_CACHED = 200;
 
 export interface Entry {
   /** Last answer, or null before the first one arrives. */
@@ -28,15 +30,27 @@ interface Slot {
   nextAt: number;
   inflight: boolean;
   failures: number;
-  lastRunAt: number;
 }
 
 // Last answers outlive the editor, so switching notes and back shows them at once.
+// Insertion order is recency: a write moves the text to the end.
 const cache = new Map<string, { result: LiveRefResult; at: number }>();
+// Bumped on clear, so a run that started before it cannot refill the cache.
+let cacheGeneration = 0;
 
 /** Clears remembered answers (config changed, or tests). */
 export function clearResultCache(): void {
   cache.clear();
+  cacheGeneration++;
+}
+
+function remember(text: string, result: LiveRefResult, at: number): void {
+  cache.delete(text);
+  cache.set(text, { result, at });
+  for (const oldest of cache.keys()) {
+    if (cache.size <= MAX_CACHED) break;
+    cache.delete(oldest);
+  }
 }
 
 /**
@@ -75,7 +89,6 @@ export class Scheduler {
           nextAt: now,
           inflight: false,
           failures: 0,
-          lastRunAt: -Infinity,
         });
       }
     }
@@ -91,11 +104,8 @@ export class Scheduler {
       this.stopTimer();
       return;
     }
-    // Back in view: one immediate run for whatever went stale, no catch-up.
-    const now = this.deps.now();
-    for (const slot of this.slots.values()) {
-      if (now - slot.lastRunAt >= slot.intervalMs) slot.nextAt = Math.min(slot.nextAt, now);
-    }
+    // Back in view: whatever went stale while hidden is already due and runs once;
+    // backed-off and parked slots keep their time.
     this.schedule();
   }
 
@@ -136,20 +146,21 @@ export class Scheduler {
     const now = this.deps.now();
     for (const [text, slot] of this.slots) {
       if (slot.inflight || slot.nextAt > now) continue;
-      this.start(text, slot, now);
+      this.start(text, slot);
     }
     this.schedule();
   }
 
-  private start(text: string, slot: Slot, now: number): void {
+  private start(text: string, slot: Slot): void {
     slot.inflight = true;
-    slot.lastRunAt = now;
+    const generation = cacheGeneration;
     const settle = (result: LiveRefResult) => {
       slot.inflight = false;
       if (this.disposed) return;
       const at = this.deps.now();
       slot.nextAt = at + nextDelay(slot, result.status);
-      if (result.status !== "busy" || !cache.has(text)) cache.set(text, { result, at });
+      const fresh = generation === cacheGeneration;
+      if (fresh && (result.status !== "busy" || !cache.has(text))) remember(text, result, at);
       // A slot dropped by setKeys while running stays out.
       if (this.slots.get(text) === slot) {
         this.schedule();
@@ -177,7 +188,10 @@ function nextDelay(slot: Slot, status: LiveRefResult["status"]): number {
     case "error":
     case "timeout":
       slot.failures++;
-      return Math.min(slot.intervalMs * 2 ** slot.failures, MAX_BACKOFF_MS);
+      return Math.max(
+        slot.intervalMs,
+        Math.min(slot.intervalMs * 2 ** slot.failures, MAX_BACKOFF_MS),
+      );
     case "busy":
       return slot.intervalMs;
     default:

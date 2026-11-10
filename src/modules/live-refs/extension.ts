@@ -53,6 +53,8 @@ class LiveRefsPlugin {
     document.addEventListener("visibilitychange", this.onVisibility);
     this.unsubscribe = deps.onConfigChanged(() => {
       clearResultCache();
+      // A resolve in flight from before the change must not be applied.
+      this.generation++;
       this.textsKey = "";
       this.resolved.clear();
       this.scheduler.setKeys([]);
@@ -111,6 +113,7 @@ class LiveRefsPlugin {
   }
 
   private rescan(): void {
+    window.clearTimeout(this.debounce);
     this.debounce = undefined;
     const texts = uniqueTexts(findCandidates(this.view.state));
     const key = texts.join("\u0000");

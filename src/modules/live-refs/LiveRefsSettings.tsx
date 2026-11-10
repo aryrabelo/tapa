@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -103,6 +103,16 @@ const BLANK: Draft = {
 
 let nextId = 1;
 
+/** Same ranges Rust accepts; checked here so a typo gets a plain message, not a parse error. */
+function timingError(d: Draft): string | null {
+  const whole = (s: string, min: number, max: number) =>
+    /^\d+$/.test(s.trim()) && Number(s) >= min && Number(s) <= max;
+  if (!whole(d.intervalSec, 2, 3600)) return "Every: use a whole number of seconds, 2 to 3600.";
+  if (!whole(d.timeoutMs, 200, 10_000))
+    return "Give up after: use a whole number of ms, 200 to 10000.";
+  return null;
+}
+
 /** Settings section for live references. Loaded only while the plugin is on. */
 export default function LiveRefsSettings(): React.ReactElement {
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -110,7 +120,9 @@ export default function LiveRefsSettings(): React.ReactElement {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error: boolean; row?: number } | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoadError(null);
+    setRows(null);
     liveRefsConfig().then(
       (c) => setRows(c.kinds.map((k) => ({ id: nextId++, draft: toDraft(k), saved: k }))),
       (e: unknown) => {
@@ -120,7 +132,12 @@ export default function LiveRefsSettings(): React.ReactElement {
     );
   }, []);
 
+  useEffect(() => load(), [load]);
+
   if (!rows) return <p className="text-xs text-muted-foreground">Loading…</p>;
+
+  // Saving over a config that could not be read would drop the user's commands.
+  const locked = saving || loadError !== null;
 
   const edit = (id: number, patch: Partial<Draft>) =>
     setRows(
@@ -156,6 +173,14 @@ export default function LiveRefsSettings(): React.ReactElement {
   };
 
   const save = async () => {
+    if (locked) return;
+    for (const r of rows) {
+      const text = timingError(r.draft);
+      if (text) {
+        setNotice({ text, error: true, row: r.id });
+        return;
+      }
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -188,11 +213,21 @@ export default function LiveRefsSettings(): React.ReactElement {
         A note can only name these commands, never change them. Each one runs while a note showing a
         matching reference is open, and Tapa asks you before saving a new or changed command.
       </p>
-      {loadError ? <p className="text-xs text-destructive">{loadError}</p> : null}
+      {loadError ? (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-destructive">
+            Could not read your saved commands, so nothing can be changed: {loadError}
+          </p>
+          <Button size="sm" variant="outline" onClick={load}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
       {rows.map((row) => (
         <KindRow
           key={row.id}
           row={row}
+          locked={locked}
           onEdit={(patch) => edit(row.id, patch)}
           onRemove={() => setRows((rs) => rs?.filter((r) => r.id !== row.id) ?? rs)}
           error={notice?.error && notice.row === row.id ? notice.text : null}
@@ -202,16 +237,17 @@ export default function LiveRefsSettings(): React.ReactElement {
         <Button
           size="sm"
           variant="outline"
+          disabled={locked}
           onClick={() =>
             setRows((rs) => [...(rs ?? []), { id: nextId++, saved: null, draft: { ...BLANK } }])
           }
         >
           Add command
         </Button>
-        <Button size="sm" variant="outline" onClick={() => void addBora()}>
+        <Button size="sm" variant="outline" disabled={locked} onClick={() => void addBora()}>
           Add bora pane
         </Button>
-        <Button size="sm" disabled={saving} onClick={() => void save()}>
+        <Button size="sm" disabled={locked} onClick={() => void save()}>
           {saving ? "Saving…" : "Save"}
         </Button>
       </div>
@@ -248,11 +284,14 @@ function Field({
 
 function KindRow({
   row,
+  locked,
   onEdit,
   onRemove,
   error,
 }: {
   row: Row;
+  /** Saving, or the saved config could not be read: nothing can be edited. */
+  locked: boolean;
   onEdit: (patch: Partial<Draft>) => void;
   onRemove: () => void;
   error: string | null;
@@ -266,7 +305,7 @@ function KindRow({
   const [testing, setTesting] = useState(false);
 
   const find = async () => {
-    const name = d.program.trim().split("/").pop() ?? "";
+    const name = d.program.trim().split(/[/\\]/).pop() ?? "";
     const found = await liveRefsFindProgram(name).catch(() => null);
     if (found) onEdit({ program: found });
   };
@@ -296,6 +335,7 @@ function KindRow({
         <span className="text-xs text-foreground">On</span>
         <Switch
           checked={d.enabled}
+          disabled={locked}
           onChange={(next) => onEdit({ enabled: next })}
           aria-label={`Turn ${d.name || "this command"} on or off`}
         />
@@ -304,6 +344,7 @@ function KindRow({
         <Input
           id={`${p}-name`}
           value={d.name}
+          disabled={locked}
           onChange={(e) => onEdit({ name: e.currentTarget.value })}
         />
       </Field>
@@ -315,6 +356,7 @@ function KindRow({
           id={`${p}-match`}
           className="font-mono"
           value={d.match}
+          disabled={locked}
           onChange={(e) => onEdit({ match: e.currentTarget.value })}
         />
       </Field>
@@ -325,9 +367,10 @@ function KindRow({
             className="font-mono"
             value={d.program}
             placeholder="/opt/homebrew/bin/…"
+            disabled={locked}
             onChange={(e) => onEdit({ program: e.currentTarget.value })}
           />
-          <Button size="sm" variant="outline" onClick={() => void find()}>
+          <Button size="sm" variant="outline" disabled={locked} onClick={() => void find()}>
             Find
           </Button>
         </div>
@@ -337,6 +380,7 @@ function KindRow({
           id={`${p}-args`}
           className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 font-mono text-xs"
           value={d.args}
+          disabled={locked}
           onChange={(e) => onEdit({ args: e.currentTarget.value })}
         />
       </Field>
@@ -346,6 +390,7 @@ function KindRow({
             id={`${p}-interval`}
             inputMode="numeric"
             value={d.intervalSec}
+            disabled={locked}
             onChange={(e) => onEdit({ intervalSec: e.currentTarget.value })}
           />
         </Field>
@@ -354,6 +399,7 @@ function KindRow({
             id={`${p}-timeout`}
             inputMode="numeric"
             value={d.timeoutMs}
+            disabled={locked}
             onChange={(e) => onEdit({ timeoutMs: e.currentTarget.value })}
           />
         </Field>
@@ -362,6 +408,7 @@ function KindRow({
         <span className="text-xs text-foreground">Output is JSON</span>
         <Switch
           checked={d.json}
+          disabled={locked}
           onChange={(next) => onEdit({ json: next })}
           aria-label="Output is JSON"
         />
@@ -373,6 +420,7 @@ function KindRow({
               id={`${p}-status`}
               className="font-mono"
               value={d.status}
+              disabled={locked}
               onChange={(e) => onEdit({ status: e.currentTarget.value })}
             />
           </Field>
@@ -381,6 +429,7 @@ function KindRow({
               id={`${p}-detail`}
               className="font-mono"
               value={d.detail}
+              disabled={locked}
               onChange={(e) => onEdit({ detail: e.currentTarget.value })}
             />
           </Field>
@@ -389,6 +438,7 @@ function KindRow({
               id={`${p}-error`}
               className="font-mono"
               value={d.error}
+              disabled={locked}
               onChange={(e) => onEdit({ error: e.currentTarget.value })}
             />
           </Field>
@@ -403,17 +453,18 @@ function KindRow({
           aria-label="Sample reference text"
           placeholder="herdr-openrig w1BA:p1"
           value={sample}
+          disabled={locked}
           onChange={(e) => setSample(e.currentTarget.value)}
         />
         <Button
           size="sm"
           variant="outline"
-          disabled={dirty || testing || !sample}
+          disabled={locked || dirty || testing || !sample}
           onClick={() => void test()}
         >
           Test
         </Button>
-        <Button size="sm" variant="outline" onClick={onRemove}>
+        <Button size="sm" variant="outline" disabled={locked} onClick={onRemove}>
           Remove
         </Button>
       </div>
@@ -422,19 +473,35 @@ function KindRow({
           Save first: Test runs the saved command.
         </p>
       ) : null}
-      {result ? (
-        <div role="status" className="text-xs">
-          <span className="font-medium">
-            {result.status === "ok" ? result.state : result.status}
-          </span>
-          {result.status !== "ok" && result.state ? ` · ${result.state}` : ""}
-          {result.detail ? (
-            <pre className="mt-1 max-h-32 overflow-auto rounded border bg-muted p-1.5 font-mono text-[0.7rem] whitespace-pre-wrap">
-              {result.detail}
-            </pre>
-          ) : null}
-        </div>
-      ) : null}
+      {result ? <TestResult result={result} rowName={row.saved?.name ?? null} /> : null}
     </fieldset>
+  );
+}
+
+/** What Test returned, and which saved command produced it. */
+function TestResult({
+  result,
+  rowName,
+}: {
+  result: LiveRefResult;
+  rowName: string | null;
+}): React.ReactElement {
+  // Rust runs the first saved command whose pattern matches, which may be another row's.
+  let warning: string | null = null;
+  if (result.status === "unknown_ref") warning = "No saved command matches this sample.";
+  else if (result.name && result.name !== rowName)
+    warning = `This sample matches ${result.name}, which comes first, so that command ran instead of this one.`;
+  return (
+    <div role="status" className="text-xs">
+      {result.name ? <p className="text-muted-foreground">Ran: {result.name}</p> : null}
+      {warning ? <p className="text-destructive">{warning}</p> : null}
+      <span className="font-medium">{result.status === "ok" ? result.state : result.status}</span>
+      {result.status !== "ok" && result.state ? ` · ${result.state}` : ""}
+      {result.detail ? (
+        <pre className="mt-1 max-h-32 overflow-auto rounded border bg-muted p-1.5 font-mono text-[0.7rem] whitespace-pre-wrap">
+          {result.detail}
+        </pre>
+      ) : null}
+    </div>
   );
 }

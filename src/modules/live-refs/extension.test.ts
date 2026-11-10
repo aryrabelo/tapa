@@ -9,7 +9,7 @@ import { registry } from "@/lib/registry";
 import { liveRefsModule } from ".";
 import { liveRefs } from "./extension";
 import { clearResultCache } from "./scheduler";
-import { CHIP_CLASS, ChipWidget, chipView, stripControls } from "./widget";
+import { CHIP_CLASS, ChipWidget, chipView, detailDOM, stripControls } from "./widget";
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke, Channel: class {} }));
@@ -30,6 +30,12 @@ let resolveCalls: string[][];
 let runCalls: string[];
 let output: LiveRefResult;
 let configChanged: (() => void) | null;
+let resolveAnswer: (texts: string[]) => Promise<LiveRefResolved[]>;
+
+const bora = async (texts: string[]) =>
+  texts.map(
+    (t): LiveRefResolved => (/w\w+:p\d+$/.test(t) ? { name: "bora-pane", intervalSec: 5 } : null),
+  );
 
 function open(doc: string) {
   view = new EditorView({
@@ -38,12 +44,9 @@ function open(doc: string) {
       extensions: [
         markdown({ base: markdownLanguage }),
         liveRefs({
-          resolve: async (texts) => {
+          resolve: (texts) => {
             resolveCalls.push(texts);
-            return texts.map(
-              (t): LiveRefResolved =>
-                /w\w+:p\d+$/.test(t) ? { name: "bora-pane", intervalSec: 5 } : null,
-            );
+            return resolveAnswer(texts);
           },
           run: async (t) => {
             runCalls.push(t);
@@ -74,6 +77,7 @@ beforeEach(() => {
   runCalls = [];
   configChanged = null;
   output = result("done");
+  resolveAnswer = bora;
 });
 
 afterEach(() => {
@@ -130,6 +134,20 @@ describe("live references in the editor", () => {
     expect(chips()[0].textContent).toBe("working");
   });
 
+  it("ignores a resolve from before a config change once the note has no references", async () => {
+    let release: (answers: LiveRefResolved[]) => void = () => {};
+    resolveAnswer = () => new Promise((r) => (release = r));
+    const v = open("[w1BA:p1]");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resolveCalls).toHaveLength(1);
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: "no references" } });
+    configChanged?.();
+    release([{ name: "bora-pane", intervalSec: 5 }]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(runCalls).toEqual([]);
+    expect(chips()).toHaveLength(0);
+  });
+
   it("stops polling when the note closes", async () => {
     open("[w1BA:p1]");
     await vi.advanceTimersByTimeAsync(0);
@@ -179,6 +197,17 @@ describe("chip", () => {
     });
     expect(chipView(entry(result("", { status: "invalid_arg" }))).kind).toBe("invalid");
     expect(chipView(entry(null, true)).kind).toBe("limit");
+    expect(chipView(entry(result("", { status: "unknown_ref" })))).toMatchObject({
+      kind: "error",
+      label: "not set up",
+    });
+    expect(chipView(entry(result("", { status: "busy" }))).kind).toBe("loading");
+  });
+
+  it("shows the hover card's output as text, never as markup", () => {
+    const card = detailDOM("w1:p1", chipView(entry(result("done", { detail: "<b>x</b>" }))), 3);
+    expect(card.querySelector("pre")?.textContent).toBe("<b>x</b>");
+    expect(card.querySelector("b")).toBeNull();
   });
 
   it("compares by content so a tick with the same answer keeps the DOM", () => {

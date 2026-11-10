@@ -44,8 +44,14 @@ export function chipView(entry: Entry): ChipView {
     };
   }
   const r = entry.result;
-  if (!r || r.status === "unknown_ref")
-    return { kind: "loading", label: "…", tone: "", detail: "" };
+  if (!r) return { kind: "loading", label: "…", tone: "", detail: "" };
+  if (r.status === "unknown_ref")
+    return {
+      kind: "error",
+      label: "not set up",
+      tone: "",
+      detail: "No saved command in Settings handles this reference.",
+    };
   const state = stripControls(r.state).trim();
   const detail = stripControls(r.detail);
   switch (r.status) {

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LiveRefKind } from "@/lib/tauri";
+import type { LiveRefKind, LiveRefsConfig } from "@/lib/tauri";
 
 const tauri = vi.hoisted(() => ({
   liveRefsConfig: vi.fn(),
@@ -30,7 +30,8 @@ async function mount(kinds: LiveRefKind[] = []) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // Reset implementations too, so one test's answers never leak into the next.
+  vi.resetAllMocks();
   tauri.liveRefsFindProgram.mockResolvedValue("/Users/me/.local/bin/bora");
 });
 
@@ -103,9 +104,95 @@ describe("Live references settings", () => {
     });
     expect(tauri.liveRefsRun).toHaveBeenCalledWith("herdr-openrig w1BA:p1");
     expect(screen.getByText("done")).toBeTruthy();
+    expect(screen.getByText("Ran: bora-pane")).toBeTruthy();
+    expect(screen.queryByText(/ran instead of this one/)).toBeNull();
 
     fireEvent.input(screen.getByLabelText("Every (seconds)"), { target: { value: "9" } });
     expect((screen.getByText("Test") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/Save first/)).toBeTruthy();
+  });
+
+  it("says when Test ran another saved command whose pattern comes first", async () => {
+    tauri.liveRefsRun.mockResolvedValue({
+      status: "ok",
+      name: "other-pane",
+      state: "idle",
+      detail: "",
+      exitCode: 0,
+      ms: 3,
+    });
+    await mount([bora]);
+    fireEvent.input(screen.getByLabelText("Sample reference text"), {
+      target: { value: "w1BA:p1" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Test"));
+    });
+    expect(screen.getByText("Ran: other-pane")).toBeTruthy();
+    expect(screen.getByText(/other-pane, which comes first/)).toBeTruthy();
+  });
+
+  it("never saves over commands it could not read, until a retry reads them", async () => {
+    tauri.liveRefsConfig.mockRejectedValueOnce("permission denied");
+    render(<LiveRefsSettings />);
+    await act(async () => {});
+    expect(screen.getByText(/permission denied/)).toBeTruthy();
+    for (const label of ["Save", "Add command", "Add bora pane"]) {
+      expect((screen.getByText(label) as HTMLButtonElement).disabled, label).toBe(true);
+    }
+    await act(async () => {
+      fireEvent.click(screen.getByText("Save"));
+    });
+    expect(tauri.liveRefsSave).not.toHaveBeenCalled();
+
+    tauri.liveRefsConfig.mockResolvedValueOnce({ version: 1, kinds: [bora] });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Retry"));
+    });
+    expect(screen.queryByText(/permission denied/)).toBeNull();
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("bora-pane");
+    expect((screen.getByText("Save") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("checks the timing fields on the row before saving", async () => {
+    await mount([bora]);
+    fireEvent.input(screen.getByLabelText("Every (seconds)"), { target: { value: "1.5" } });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Save"));
+    });
+    expect(tauri.liveRefsSave).not.toHaveBeenCalled();
+    expect(screen.getByText(/Every: use a whole number/).closest("fieldset")).toBeTruthy();
+
+    fireEvent.input(screen.getByLabelText("Every (seconds)"), { target: { value: "5" } });
+    fireEvent.input(screen.getByLabelText("Give up after (ms)"), { target: { value: "" } });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Save"));
+    });
+    expect(tauri.liveRefsSave).not.toHaveBeenCalled();
+    expect(screen.getByText(/Give up after: use a whole number/)).toBeTruthy();
+  });
+
+  it("locks the form while a save is pending", async () => {
+    let finish: (c: LiveRefsConfig) => void = () => {};
+    tauri.liveRefsSave.mockReturnValue(new Promise((r) => (finish = r)));
+    await mount([bora]);
+    await act(async () => {
+      fireEvent.click(screen.getByText("Save"));
+    });
+    const program = () => screen.getByLabelText("Command (full path)") as HTMLInputElement;
+    expect(program().disabled).toBe(true);
+    for (const label of ["Find", "Remove", "Add command", "Add bora pane", "Saving…"]) {
+      expect((screen.getByText(label) as HTMLButtonElement).disabled, label).toBe(true);
+    }
+    await act(async () => finish({ version: 1, kinds: [bora] }));
+    expect(program().disabled).toBe(false);
+  });
+
+  it("finds a Windows program by its file name", async () => {
+    await mount([{ ...bora, program: "C:\\Tools\\bora.exe" }]);
+    await act(async () => {
+      fireEvent.click(screen.getByText("Find"));
+    });
+    expect(tauri.liveRefsFindProgram).toHaveBeenCalledWith("bora.exe");
   });
 });

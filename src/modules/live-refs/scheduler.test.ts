@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LiveRefResult } from "@/lib/tauri";
-import { clearResultCache, MAX_BACKOFF_MS, MAX_KEYS, Scheduler } from "./scheduler";
+import { clearResultCache, MAX_BACKOFF_MS, MAX_CACHED, MAX_KEYS, Scheduler } from "./scheduler";
 
 const ok = (state: string): LiveRefResult => ({
   status: "ok",
@@ -143,5 +143,64 @@ describe("Scheduler", () => {
     s.setKeys([["a", 5]]);
     await vi.advanceTimersByTimeAsync(0);
     expect(s.get("a")?.result).toMatchObject({ status: "error", detail: "Error: ipc down" });
+  });
+
+  it("keeps a backed-off wait when the window shows again", async () => {
+    answer = async () => failed;
+    s.setKeys([["a", 10]]);
+    await vi.advanceTimersByTimeAsync(0); // fail 1 → next run at 20 s
+    s.setVisible(false);
+    await vi.advanceTimersByTimeAsync(15_000);
+    s.setVisible(true);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(runs).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runs).toHaveLength(2);
+  });
+
+  it("does not re-run a parked reference when the window shows again", async () => {
+    answer = async () => ({ ...failed, status: "unknown_ref" });
+    s.setKeys([["a", 2]]);
+    await vi.advanceTimersByTimeAsync(0);
+    s.setVisible(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    s.setVisible(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(runs).toEqual(["a"]);
+  });
+
+  it("never polls a failing reference sooner than its interval", async () => {
+    answer = async () => failed;
+    s.setKeys([["a", 3600]]);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(3_600_000 - 1);
+    expect(runs).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runs).toHaveLength(2);
+  });
+
+  it("drops an answer from a run that started before the cache was cleared", async () => {
+    let release: (r: LiveRefResult) => void = () => {};
+    answer = () => new Promise((r) => (release = r));
+    s.setKeys([["a", 5]]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runs).toEqual(["a"]);
+    clearResultCache();
+    release(ok("old command"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.get("a")?.result).toBeNull();
+  });
+
+  it(`remembers at most ${MAX_CACHED} answers, dropping the oldest`, async () => {
+    for (let i = 0; i <= MAX_CACHED; i++) {
+      s.setKeys([[`t${i}`, 5]]);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    s.setKeys([
+      ["t0", 5],
+      ["t1", 5],
+    ]);
+    expect(s.get("t0")?.result).toBeNull();
+    expect(s.get("t1")?.result?.state).toBe("state of t1");
   });
 });
