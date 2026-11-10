@@ -51,9 +51,10 @@ We sell Tapa as **the first agent-reactive Markdown vault**, not "another reader
   `think`.
 - ❌ No 24/7 "dream-cycle" daemon (where gbrain's operational fragility lives).
   Enrichment is event- or user-triggered, never an always-on server.
-  Live references are an opt-in plugin, not an exception: they run a command
-  the user approved in Settings, only while a note showing the reference is
-  open and visible, and stop with it — no daemon, no model.
+  Live references are an opt-in plugin, not an exception: they poll a command
+  the user approved in Settings only while a note showing the reference is
+  open and visible, and stop with it; the Settings Test button runs a saved
+  command once, when asked — no daemon, no model.
 
 ## The cheap trio (steal from gbrain — ~80% of the value at ~5% of the weight)
 

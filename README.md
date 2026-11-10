@@ -93,7 +93,8 @@ work and show the pane's status (`working`, `idle`, `done`, …):
 ```
 
 The words before the pane id are just a label for you; only the id reaches the
-command (`bora pane get w1BA:p1`). Hover the chip for the full output.
+command (`bora pane get w1BA:p1`). Hover the chip to see the command's output,
+capped at 4 KB, or for JSON output the detail field you set.
 
 Safety: a note can only name a reference, never a command. Commands are defined
 in Settings and Tapa asks you in a native dialog before saving a new or changed
@@ -234,8 +235,10 @@ Tapa is a thin native shell around a web frontend:
 
 - **Frontend** — React 19 + Vite, Tailwind v4 + shadcn tokens. Markdown is
   rendered in JS with `react-markdown` (remark/GFM); editing uses CodeMirror 6.
-- **Backend** — Rust (Tauri v2) handles only I/O: folder scan, file read/write,
-  and a filesystem watcher for live reload. No business logic lives in Rust.
+- **Backend** — Rust (Tauri v2) handles I/O: folder scan, file read/write,
+  and a filesystem watcher for live reload. The one exception is live
+  references, whose matching, checks and command running live in Rust on
+  purpose, as the safety boundary between a note and your machine.
 - **Startup budget** — the boot bundle is aggressively code-split. The editor
   (CodeMirror), the Markdown renderer, the command palette, the sidebar, and
   toasts each load on demand instead of at startup. The result: the eager bundle
