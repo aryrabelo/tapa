@@ -4,9 +4,10 @@ import { EditorView } from "@codemirror/view";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearRecents, pushRecent } from "@/lib/recent";
 import { createRegistry } from "@/lib/registry";
-import { readFile } from "@/lib/tauri";
+import { type AiStatus, aiComplete, readFile } from "@/lib/tauri";
 import { useStore } from "@/state/store";
-import { GHOST_CLASS } from "./ghost";
+import { setAiStatus } from "./ai";
+import { GHOST_CLASS, REMOTE_DELAY_MS } from "./ghost";
 import { autocompleteModule } from "./index";
 
 const disk: Record<string, string> = {
@@ -28,7 +29,22 @@ const fromDisk = async (path: string): Promise<string> => {
 vi.mock("@/lib/tauri", () => ({
   readFile: vi.fn(),
   setRecentMenu: vi.fn(async () => {}),
+  aiStatus: vi.fn(async () => aiStatus(false)),
+  aiComplete: vi.fn(async () => " no Pará."),
 }));
+
+function aiStatus(enabled: boolean): AiStatus {
+  return {
+    enabled,
+    provider: "openai",
+    model: "",
+    hasKey: enabled,
+    defaultModels: { openai: "gpt-6-luna", anthropic: "claude-haiku-5-5" },
+  };
+}
+
+/** A macrotask turn: every promise already resolved (a held read, loadNotes) settles. */
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 const created: EditorView[] = [];
 
@@ -48,6 +64,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const v of created.splice(0)) v.destroy();
+  setAiStatus(aiStatus(false));
   clearRecents();
   useStore.setState({
     root: null,
@@ -59,7 +76,10 @@ afterEach(() => {
   });
 });
 
-/** An editor with the plugin on and "o rio T" typed; `ghost()` re-reads the suggestion. */
+/**
+ * An editor with the plugin on and "o rio T" typed; `ghost()` re-reads the
+ * suggestion at the end of the line, `type()` types more there.
+ */
 async function typedEditor() {
   const reg = createRegistry();
   reg.register(autocompleteModule);
@@ -71,17 +91,30 @@ async function typedEditor() {
     parent: document.body,
   });
   created.push(view);
-  view.dispatch({
-    changes: { from: 0, insert: "o rio T" },
-    selection: { anchor: 7 },
-    userEvent: "input.type",
-  });
+  const type = (text: string) => {
+    const end = view.state.doc.length;
+    view.dispatch({
+      changes: { from: end, insert: text },
+      selection: { anchor: end + text.length },
+      userEvent: "input.type",
+    });
+  };
+  type("o rio T");
   // Each caret set recomputes the suggestion against the current corpus.
   const ghost = () => {
-    view.dispatch({ selection: { anchor: 7 } });
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
     return view.contentDOM.querySelector(`.${GHOST_CLASS}`)?.textContent ?? null;
   };
-  return { ghost };
+  return { ghost, type };
+}
+
+/** A `readFile` result held until `finish` is called. ES2022 lib: no Promise.withResolvers. */
+function held() {
+  let finish: (text: string) => void = () => {};
+  const promise = new Promise<string>((resolve) => {
+    finish = resolve;
+  });
+  return { promise, finish: (text: string) => finish(text) };
 }
 
 describe("autocomplete plugin", () => {
@@ -285,6 +318,106 @@ describe("autocomplete plugin", () => {
     // dropped the moment the state returned to what was already pending.
     expect(readFile).toHaveBeenCalledTimes(1);
     expect(readFile).not.toHaveBeenCalledWith("/elsewhere/b.md");
+  });
+
+  it("A → B → A while B loads: B lands, then A is loaded again and applied", async () => {
+    const { ghost } = await typedEditor();
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+    const slowB = held();
+    vi.mocked(readFile).mockImplementation((path) =>
+      path === "/slow/x.md" ? slowB.promise : fromDisk(path),
+    );
+
+    useStore.setState({ root: "/slow", files: ["x.md"], activePath: null }); // B pending
+    ghost();
+    // Back to A: the same paths as the applied list, in new arrays.
+    useStore.setState({ root: "/vault", files: ["open.md", "other.md"], activePath: "open.md" });
+    ghost();
+    expect(readFile).toHaveBeenCalledTimes(2); // A's first load, then B
+
+    slowB.finish("Vi o rio Trombetas. Vi o rio Trombetas.");
+    await vi.waitFor(() => expect(readFile).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(readFile).mock.calls[2]).toEqual(["/vault/other.md"]);
+    await vi.waitFor(() => expect(ghost()).toBe("apajós."));
+    expect(readFile).toHaveBeenCalledTimes(3); // exactly one more load, for A
+  });
+
+  it("reads a note the budget cut again in full once there is room for it", async () => {
+    const big: Record<string, string> = {
+      // 5 units short of the 2,000,000 budget, so b.md is cut to "Vi o ".
+      "/big/a.md": "x".repeat(1_999_995),
+      "/big/b.md": "Vi o rio Trombetas.",
+    };
+    vi.mocked(readFile).mockImplementation(async (path) => big[path] ?? fromDisk(path));
+    useStore.setState({ root: "/big", files: ["a.md", "b.md"], activePath: null });
+    const { ghost } = await typedEditor();
+    await vi.waitFor(() => expect(readFile).toHaveBeenCalledWith("/big/b.md"));
+    await Promise.resolve();
+    expect(ghost()).toBeNull(); // only "Vi o " made it in
+
+    useStore.setState({ files: ["b.md"] }); // a.md dropped: room for all of b.md
+    await vi.waitFor(() => expect(ghost()).toBe("rombetas."));
+    expect(readFile).toHaveBeenCalledTimes(3); // b.md read again, not reused cut
+  });
+
+  describe("with AI on", () => {
+    // Only the asker's pause is faked; promises and `vi.waitFor` run for real.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    const pastRemoteDelay = () => vi.advanceTimersByTimeAsync(REMOTE_DELAY_MS + 1);
+
+    function slowFolder() {
+      const slow = held();
+      vi.mocked(readFile).mockImplementation((path) =>
+        path === "/slow/x.md" ? slow.promise : fromDisk(path),
+      );
+      useStore.setState({ root: "/slow", files: ["x.md"], activePath: null });
+      return slow;
+    }
+
+    it("never asks the AI while the first load is still reading the notes", async () => {
+      const slow = slowFolder();
+      const { ghost, type } = await typedEditor();
+      setAiStatus(aiStatus(true));
+      type("o"); // "o rio To", typed while x.md is still being read
+      await pastRemoteDelay();
+      expect(aiComplete).not.toHaveBeenCalled();
+
+      slow.finish("Passei pelo rio Tocantins.");
+      await vi.waitFor(() => expect(ghost()).toBe("cantins.")); // loaded
+      // Typing on past what the notes know: now the pause asks the AI.
+      type("x");
+      await pastRemoteDelay();
+      expect(aiComplete).toHaveBeenCalledTimes(1);
+      expect(aiComplete).toHaveBeenCalledWith("o rio Tox", "");
+    });
+
+    it("a match in the loaded notes wins, and nothing is sent", async () => {
+      const slow = slowFolder();
+      const { ghost, type } = await typedEditor();
+      setAiStatus(aiStatus(true));
+      slow.finish("Passei pelo rio Tocantins.");
+      await vi.waitFor(() => expect(ghost()).toBe("ocantins."));
+      type("o");
+      await pastRemoteDelay();
+      expect(aiComplete).not.toHaveBeenCalled();
+      expect(ghost()).toBe("cantins.");
+    });
+
+    it("a load landing during the pause with a match keeps the text local", async () => {
+      const slow = slowFolder();
+      const { type } = await typedEditor();
+      setAiStatus(aiStatus(true));
+      type("o"); // the ghost is computed now, with no notes yet
+      slow.finish("Passei pelo rio Tocantins.");
+      await settle(); // the load lands before the pause ends
+      await pastRemoteDelay();
+      expect(aiComplete).not.toHaveBeenCalled();
+    });
   });
 
   it("drops the old folder's text once a load for the new root lands", async () => {

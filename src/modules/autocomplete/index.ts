@@ -2,8 +2,8 @@ import type { ModuleContext, Module } from "@/lib/registry";
 import { getRecents } from "@/lib/recent";
 import { readFile } from "@/lib/tauri";
 import { aiSuggest, loadAiStatus } from "./ai";
-import { ghostText } from "./ghost";
-import { type CorpusLimits, loadNotes } from "./provider";
+import { type RemoteSuggest, ghostText } from "./ghost";
+import { type CorpusLimits, loadNotes, suggest } from "./provider";
 
 const CORPUS_LIMITS: CorpusLimits = { maxFiles: 500, maxChars: 2_000_000 };
 const MARKDOWN = /\.(?:md|markdown)$/i;
@@ -48,6 +48,20 @@ function samePaths(a: readonly string[], b: readonly string[] | null): boolean {
   return b !== null && a.length === b.length && a.every((p, i) => p === b[i]);
 }
 
+/**
+ * The path of a note `loadNotes` may have cut to fit the budget: the last one
+ * it read, when the loaded total reached `maxChars`. Null when nothing was cut.
+ */
+function budgetCut(loaded: ReadonlyMap<string, string>): string | null {
+  let total = 0;
+  let last: string | null = null;
+  for (const [abs, text] of loaded) {
+    total += text.length;
+    last = abs;
+  }
+  return total >= CORPUS_LIMITS.maxChars ? last : null;
+}
+
 // Notes to learn from, read in the background whenever the folder, the open
 // files, the active note or the recent list changes the corpus's path list
 // (`corpusPaths`, compared by VALUE, not by the store's array identity — a
@@ -57,12 +71,16 @@ function samePaths(a: readonly string[], b: readonly string[] | null): boolean {
 // more load (for the latest list requested while it ran) follows it, so a
 // stream of changes can never leave the corpus empty or starve it forever. A
 // path still in both the old and the new list reuses its already-read text
-// instead of re-reading it. The note being edited is left out (never read):
-// the editor feeds its live text instead. A file that can't be read is
-// skipped. Limitations: a note saved after its text was read keeps that old
-// text until the path list changes again, and a path dropped from the list
-// only stops being served once the next load (for the list that dropped it)
-// lands, not the instant it disappears from the store.
+// instead of re-reading it, except a note the budget may have cut (the last
+// one read once the cap was reached), which is read again in full. The list
+// the store currently asks for is tracked while a load is pending, so going
+// back to the applied list mid-load (A → B → A) loads A again after B lands.
+// `ready()` is false until the first load has landed. The note being edited
+// is left out (never read): the editor feeds its live text instead. A file
+// that can't be read is skipped. Limitations: a note saved after its text was
+// read keeps that old text until the path list changes again, and a path
+// dropped from the list only stops being served once the next load (for the
+// list that dropped it) lands, not the instant it disappears from the store.
 function corpusNotes(getState: ModuleContext["getState"]) {
   let generation = 0;
   let notes = new Map<string, string>();
@@ -74,8 +92,9 @@ function corpusNotes(getState: ModuleContext["getState"]) {
   const start = (paths: string[]) => {
     const gen = ++generation;
     const cache = notes;
+    const cut = budgetCut(cache);
     const read = (abs: string) =>
-      cache.has(abs) ? Promise.resolve(cache.get(abs) as string) : readFile(abs);
+      abs !== cut && cache.has(abs) ? Promise.resolve(cache.get(abs) as string) : readFile(abs);
     pendingPaths = paths;
     void loadNotes(paths, read, CORPUS_LIMITS, () => gen !== generation).then((loaded) => {
       if (gen !== generation) return;
@@ -121,12 +140,8 @@ function corpusNotes(getState: ModuleContext["getState"]) {
     lastRecent = recent;
 
     const paths = corpusPaths(state, recent);
-    if (samePaths(paths, appliedPaths)) return;
-    if (samePaths(paths, pendingPaths)) {
-      queuedPaths = null; // back to what's already loading: drop a stale queue
-      return;
-    }
     if (paths.length === 0) {
+      if (!pendingPaths && samePaths(paths, appliedPaths)) return;
       generation++; // cancels any read in flight; nothing left to learn from
       pendingPaths = null;
       queuedPaths = null;
@@ -136,10 +151,23 @@ function corpusNotes(getState: ModuleContext["getState"]) {
       return;
     }
     if (pendingPaths) {
-      queuedPaths = paths;
+      // The latest request wins, even one equal to the applied list (A → B → A
+      // must not leave B applied); back to what is loading drops the queue.
+      queuedPaths = samePaths(paths, pendingPaths) ? null : paths;
       return;
     }
+    if (samePaths(paths, appliedPaths)) return;
     start(paths);
+  };
+
+  /**
+   * False until the first load has landed (an empty list counts: nothing to
+   * learn). While a reload is pending the previous notes keep serving, so it
+   * stays true.
+   */
+  const ready = (): boolean => {
+    refresh();
+    return appliedPaths !== null;
   };
 
   const sources = (): readonly string[] => {
@@ -164,7 +192,27 @@ function corpusNotes(getState: ModuleContext["getState"]) {
   };
 
   refresh();
-  return { sources, dispose };
+  return { sources, ready, dispose };
+}
+
+/**
+ * `remote` asked only when the local corpus has had its say: never while the
+ * first load is still running (a note being read could match, and nothing may
+ * be sent while it might), and never when the loaded notes now match the line
+ * (a load that landed after the ghost was computed). Limit: the local ghost
+ * is not redrawn the moment a load lands (that would need a view dispatch
+ * from here); the next edit or caret move recomputes it.
+ */
+function localFirst(
+  corpus: { ready: () => boolean; sources: () => readonly string[] },
+  remote: RemoteSuggest,
+): RemoteSuggest {
+  return (before, after, signal) => {
+    if (!corpus.ready()) return Promise.resolve(null);
+    const line = before.slice(before.lastIndexOf("\n") + 1);
+    if (suggest(corpus.sources(), line)) return Promise.resolve(null);
+    return remote(before, after, signal);
+  };
 }
 
 // Suggests the rest of a word, as ghost text, from what the user's other notes
@@ -177,6 +225,6 @@ export const autocompleteModule: Module = {
     const corpus = corpusNotes(ctx.getState);
     ctx.onDispose(corpus.dispose);
     void loadAiStatus();
-    ctx.registerEditorExtension(ghostText(corpus.sources, aiSuggest));
+    ctx.registerEditorExtension(ghostText(corpus.sources, localFirst(corpus, aiSuggest)));
   },
 };
