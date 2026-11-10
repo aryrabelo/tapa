@@ -54,6 +54,11 @@ export function clearRecents(): void {
   commit([]);
 }
 
+/** The current list, outside React. A change replaces the array, so identity tells it changed. */
+export function getRecents(): readonly string[] {
+  return list;
+}
+
 export function useRecents(): string[] {
   return useSyncExternalStore(
     (cb) => {
