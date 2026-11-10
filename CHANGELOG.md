@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Tab** nests the list item under the one above it (`Shift-Tab` un-nests);
+  inside a code block it indents or un-indents the line or the selection
+  instead. Anywhere else it does nothing, so the keyboard stays in the note.
 - **AI suggestions** (optional, off by default): when your notes have no
   suggestion and you pause typing, Tapa can ask OpenAI or Anthropic for one
   short sentence, shown as the same gray ghost with a faint dotted underline.
@@ -24,6 +27,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   can't be read is skipped.
 
 ### Fixed
+- A bare e-mail address or web link (`aryrabelo@gmail.com`, `https://…`,
+  `www.…`, `<https://…>`) no longer disappears once the cursor leaves its
+  line. Only the hidden destination of a `[text](link)` still works that way.
 - Suggestions from your other notes no longer stop after the first one when
   files in the folder keep changing (for example while an AI agent or Git is
   working there).
