@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Live references** (plugin, off by default): write `[herdr-openrig w1BA:p1]`
+  or `[w1BA:p1]` in a note and a chip after it shows that agent's state, kept
+  current while the note is open and visible; hover it for the full output.
+  Commands are set in Settings (with a **bora pane** preset) and Tapa asks in a
+  native dialog before saving a new or changed one. A note can only name a
+  reference; the program runs without a shell, with a time limit, and only the
+  checked parts of the reference are passed as arguments. Output is plain text
+  and nothing is written into the note.
+
 ## [0.8.0] - 2026-10-26
 
 ### Added

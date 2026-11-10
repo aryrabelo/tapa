@@ -80,6 +80,28 @@ of the usual web-app weight.
 > streams matches from Rust grouped by file; press `Enter` on a match to jump
 > straight to that line.
 
+### Live references (plugin, off by default)
+
+Write a reference to one of your coding agents in a note and Tapa shows its
+state right after it, kept current while the note is open. With the
+**bora pane** preset in Settings → Plugins → Live references, both of these
+work and show the pane's status (`working`, `idle`, `done`, …):
+
+```markdown
+[herdr-openrig w1BA:p1]
+[w1BA:p1]
+```
+
+The words before the pane id are just a label for you; only the id reaches the
+command (`bora pane get w1BA:p1`). Hover the chip for the full output.
+
+Safety: a note can only name a reference, never a command. Commands are defined
+in Settings and Tapa asks you in a native dialog before saving a new or changed
+one; it runs the program directly (no shell), with a time limit, and only the
+parts of the reference your pattern picks out are passed, as separate checked
+arguments. The output is shown as plain text and nothing is written into the
+note.
+
 ## ⌨️ Keyboard shortcuts
 
 | Shortcut | Action |

@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { Monitor, Moon, Sun } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import {
   isPluginEnabled,
   setPluginRunning,
   subscribePluginEnabled,
+  type PluginManifest,
   toggleablePlugins,
 } from "@/lib/plugins";
 import { getPluginConfigValue, setPluginConfigValue } from "@/lib/plugin-config";
@@ -45,6 +46,27 @@ const enabledSnapshot = () =>
   toggleablePlugins()
     .map((p) => isPluginEnabled(p.id))
     .join();
+
+// A plugin's own Settings section, fetched only when that plugin is on.
+const sections = new Map<string, React.LazyExoticComponent<React.ComponentType>>();
+function PluginSection({
+  id,
+  load,
+}: {
+  id: string;
+  load: NonNullable<PluginManifest["settings"]>;
+}): React.ReactElement {
+  let Section = sections.get(id);
+  if (!Section) {
+    Section = lazy(load);
+    sections.set(id, Section);
+  }
+  return (
+    <Suspense fallback={<p className="text-xs text-muted-foreground">Loading…</p>}>
+      <Section />
+    </Suspense>
+  );
+}
 
 function Code({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
@@ -168,7 +190,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
             <h3 className="text-sm font-medium">Plugins</h3>
             <p className="text-xs text-muted-foreground">Turn optional features on or off.</p>
             <ul className="flex flex-col gap-3 text-sm">
-              {plugins.map(({ id, label, keys, config, blurb }) => {
+              {plugins.map(({ id, label, keys, config, blurb, settings }) => {
                 const enabled = isPluginEnabled(id);
                 return (
                   <li key={`${id}-${pluginRev}`} className="flex flex-col gap-1.5">
@@ -189,6 +211,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): React.React
                     </div>
                     {blurb ? (
                       <p className="text-[0.7rem] leading-relaxed text-muted-foreground">{blurb}</p>
+                    ) : null}
+                    {enabled && settings ? (
+                      <div className="mt-1 pl-1">
+                        <PluginSection id={id} load={settings} />
+                      </div>
                     ) : null}
                     {enabled && config?.length ? (
                       <div className="mt-1 flex flex-col gap-2 pl-1">
