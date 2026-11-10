@@ -145,4 +145,125 @@ describe("livePreview buildDecorations", () => {
     );
     expect(delimiterRow?.to).toBe(doc.indexOf("|---") + "|---|---|".length);
   });
+
+  it("never hides a bare e-mail autolink, even off the active line", () => {
+    const doc = "a\naryrabelo@gmail.com\nb\n";
+    const addr = "aryrabelo@gmail.com";
+    const addrFrom = doc.indexOf(addr);
+    const v = view(doc, 0); // cursor on line 1; the address is on line 2 (inactive)
+    const hits = collect(v);
+    const hidden = hits.find(
+      (h) => h.isReplace && h.from <= addrFrom && h.to >= addrFrom + addr.length,
+    );
+    expect(hidden).toBeUndefined();
+    const styled = hits.find(
+      (h) => h.spec.class === "cm-link" && h.from === addrFrom && h.to === addrFrom + addr.length,
+    );
+    expect(styled).toBeDefined();
+  });
+
+  it("never hides a bare https:// autolink, even off the active line", () => {
+    const doc = "a\nhttps://example.com\nb\n";
+    const url = "https://example.com";
+    const urlFrom = doc.indexOf(url);
+    const v = view(doc, 0);
+    const hits = collect(v);
+    const hidden = hits.find(
+      (h) => h.isReplace && h.from <= urlFrom && h.to >= urlFrom + url.length,
+    );
+    expect(hidden).toBeUndefined();
+    const styled = hits.find(
+      (h) => h.spec.class === "cm-link" && h.from === urlFrom && h.to === urlFrom + url.length,
+    );
+    expect(styled).toBeDefined();
+  });
+
+  it("never hides a bare www. autolink, even off the active line", () => {
+    const doc = "a\nwww.example.com\nb\n";
+    const url = "www.example.com";
+    const urlFrom = doc.indexOf(url);
+    const v = view(doc, 0);
+    const hits = collect(v);
+    const hidden = hits.find(
+      (h) => h.isReplace && h.from <= urlFrom && h.to >= urlFrom + url.length,
+    );
+    expect(hidden).toBeUndefined();
+    const styled = hits.find(
+      (h) => h.spec.class === "cm-link" && h.from === urlFrom && h.to === urlFrom + url.length,
+    );
+    expect(styled).toBeDefined();
+  });
+
+  it("hides only the angle brackets of a <https://…> autolink off the active line", () => {
+    const doc = "a\n<https://example.com>\nb\n";
+    const url = "https://example.com";
+    const urlFrom = doc.indexOf(url);
+    const openFrom = urlFrom - 1; // "<"
+    const closeFrom = urlFrom + url.length; // ">"
+    const v = view(doc, 0);
+    const hits = collect(v);
+    const hiddenUrl = hits.find(
+      (h) => h.isReplace && h.from <= urlFrom && h.to >= urlFrom + url.length,
+    );
+    expect(hiddenUrl).toBeUndefined();
+    const hiddenOpen = hits.find((h) => h.isReplace && h.from === openFrom && h.to === urlFrom);
+    expect(hiddenOpen).toBeDefined();
+    const hiddenClose = hits.find(
+      (h) => h.isReplace && h.from === closeFrom && h.to === closeFrom + 1,
+    );
+    expect(hiddenClose).toBeDefined();
+    const styled = hits.find(
+      (h) => h.spec.class === "cm-link" && h.from === urlFrom && h.to === urlFrom + url.length,
+    );
+    expect(styled).toBeDefined();
+  });
+
+  it("hides only the angle brackets of a <a@b.co> autolink off the active line", () => {
+    const doc = "a\n<a@b.co>\nb\n";
+    const addr = "a@b.co";
+    const addrFrom = doc.indexOf(addr);
+    const v = view(doc, 0);
+    const hits = collect(v);
+    const hiddenAddr = hits.find(
+      (h) => h.isReplace && h.from <= addrFrom && h.to >= addrFrom + addr.length,
+    );
+    expect(hiddenAddr).toBeUndefined();
+    const hiddenOpen = hits.find(
+      (h) => h.isReplace && h.from === addrFrom - 1 && h.to === addrFrom,
+    );
+    expect(hiddenOpen).toBeDefined();
+  });
+
+  it("hides the [text](url) destination off the active line and reveals it on the active line", () => {
+    const doc = "a\n[text](https://example.com)\nb\n";
+    const urlFrom = doc.indexOf("https://example.com");
+    const urlTo = urlFrom + "https://example.com".length;
+    const v = view(doc, 0); // cursor on line 1; the link is on line 2 (inactive)
+    const hiddenOff = collect(v).find(
+      (h) => h.isReplace && h.from === urlFrom && h.to === urlTo,
+    );
+    expect(hiddenOff).toBeDefined();
+
+    v.dispatch({ selection: { anchor: urlFrom } }); // caret moves onto the link's line
+    const hiddenOn = collect(v).find(
+      (h) => h.isReplace && h.from === urlFrom && h.to === urlTo,
+    );
+    expect(hiddenOn).toBeUndefined();
+  });
+
+  it("keeps a link reference definition's URL visible, even off the active line", () => {
+    const doc = "a\n[ref]: https://example.com\nb\n";
+    const url = "https://example.com";
+    const urlFrom = doc.indexOf(url);
+    const v = view(doc, 0); // cursor on line 1; the definition is on line 2 (inactive)
+    const hits = collect(v);
+    const hidden = hits.find(
+      (h) => h.isReplace && h.from <= urlFrom && h.to >= urlFrom + url.length,
+    );
+    expect(hidden).toBeUndefined();
+    const styled = hits.find(
+      (h) => h.spec.class === "cm-link" && h.from === urlFrom && h.to === urlFrom + url.length,
+    );
+    expect(styled).toBeDefined();
+  });
 });

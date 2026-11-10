@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- A bare e-mail address or web link (`aryrabelo@gmail.com`, `https://…`,
+  `www.…`, `<https://…>`) no longer disappears once the cursor leaves its
+  line. Only the hidden destination of a `[text](link)` still works that way.
+
 ## [0.8.0] - 2026-10-26
 
 ### Added
