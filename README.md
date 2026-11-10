@@ -222,8 +222,10 @@ Tapa is a thin native shell around a web frontend:
 
 - **Frontend** — React 19 + Vite, Tailwind v4 + shadcn tokens. Markdown is
   rendered in JS with `react-markdown` (remark/GFM); editing uses CodeMirror 6.
-- **Backend** — Rust (Tauri v2) handles only I/O: folder scan, file read/write,
-  and a filesystem watcher for live reload. No business logic lives in Rust.
+- **Backend** — Rust (Tauri v2) handles I/O: folder scan, file read/write, and
+  a filesystem watcher for live reload. The one exception is the optional AI
+  suggestions: Rust holds the API key in the OS keychain and sends the request
+  itself, so the key never reaches the webview.
 - **Startup budget** — the boot bundle is aggressively code-split. The editor
   (CodeMirror), the Markdown renderer, the command palette, the sidebar, and
   toasts each load on demand instead of at startup. The result: the eager bundle
