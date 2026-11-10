@@ -263,7 +263,7 @@ pub fn shape(raw: &str, before: &str) -> Option<String> {
     while let Some(c) = chars.next() {
         out.push(c);
         let ends_sentence = matches!(c, '.' | '!' | '?' | '…')
-            && chars.peek().map_or(true, |n| n.is_whitespace())
+            && chars.peek().is_none_or(|n| n.is_whitespace())
             && !out.trim().is_empty();
         if ends_sentence {
             break;
