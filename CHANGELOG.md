@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-11
+
+### Fixed
+- Tapa 0.9.0 was never published: its macOS build failed, so neither the
+  download page nor the in-app update offered it. 0.9.1 carries all of its
+  changes (listed under 0.9.0 below) for macOS, Windows and Linux. The macOS
+  disk image now opens without the background picture and arranged icons;
+  drag **Tapa** to Applications as before.
+
 ## [0.9.0] - 2026-11-10
 
 ### Added
@@ -297,7 +306,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notes
 - Code-split boot bundle: the eager JS+CSS parsed at launch is ~34 KB gzip.
 
-[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/aryrabelo/tapa/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/aryrabelo/tapa/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aryrabelo/tapa/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/aryrabelo/tapa/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/aryrabelo/tapa/compare/v0.6.0...v0.7.0
