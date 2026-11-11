@@ -10,7 +10,13 @@ const tauri = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/tauri", () => tauri);
 
-import LiveRefsSettings, { argvPreview, BORA_MATCH, toDraft, toKind } from "./LiveRefsSettings";
+import LiveRefsSettings, {
+  argvPreview,
+  BORA_MATCH,
+  HC_MATCH,
+  toDraft,
+  toKind,
+} from "./LiveRefsSettings";
 
 const bora: LiveRefKind = {
   name: "bora-pane",
@@ -40,10 +46,33 @@ describe("draft round trip", () => {
     expect(toKind(toDraft(bora))).toEqual(bora);
   });
 
+  it("keeps a second status pointer through the round trip", () => {
+    const hc: LiveRefKind = {
+      ...bora,
+      parse: { json: { status: "/status/state", statusFallback: "/state", detail: "/title" } },
+    };
+    expect(toKind(toDraft(hc))).toEqual(hc);
+  });
+
   it("shows the exact argv, quoting arguments with spaces", () => {
     expect(
       argvPreview({ ...bora, program: "/bin/sh", args: ["-c", 'printf %s "$1"', "_", "{1}"] }),
     ).toBe('/bin/sh -c "printf %s \\"$1\\"" _ {1}');
+  });
+});
+
+describe("hc pattern", () => {
+  // Rust anchors every pattern the same way, so the whole text inside [ ] must match.
+  const re = new RegExp(`^(?:${HC_MATCH})$`);
+
+  it("passes on only the terminal", () => {
+    expect(re.exec("hc t54")?.[1]).toBe("t54");
+    expect(re.exec("hc vps/t7")?.[1]).toBe("vps/t7");
+    expect(re.exec("hc review-docs.2")?.[1]).toBe("review-docs.2");
+  });
+
+  it("ignores text that is not one hc terminal", () => {
+    for (const text of ["t54", "hc --help", "hc t54 extra"]) expect(re.test(text)).toBe(false);
   });
 });
 
@@ -56,6 +85,20 @@ describe("Live references settings", () => {
     expect(tauri.liveRefsFindProgram).toHaveBeenCalledWith("bora");
     expect(await screen.findByText("/Users/me/.local/bin/bora pane get {1}")).toBeTruthy();
     expect((screen.getByLabelText(/Reference pattern/) as HTMLInputElement).value).toBe(BORA_MATCH);
+  });
+
+  it("adds the hc preset with the program found on this machine", async () => {
+    tauri.liveRefsFindProgram.mockResolvedValueOnce("/Users/me/.local/bin/hc");
+    await mount();
+    await act(async () => {
+      fireEvent.click(screen.getByText("Add hc terminal"));
+    });
+    expect(tauri.liveRefsFindProgram).toHaveBeenCalledWith("hc");
+    expect(await screen.findByText("/Users/me/.local/bin/hc get {1} --json")).toBeTruthy();
+    expect((screen.getByLabelText(/Reference pattern/) as HTMLInputElement).value).toBe(HC_MATCH);
+    expect((screen.getByLabelText(/if that one is missing/) as HTMLInputElement).value).toBe(
+      "/state",
+    );
   });
 
   it("keeps edits and stays calm when the save is not approved", async () => {
