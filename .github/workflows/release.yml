@@ -67,9 +67,16 @@ jobs:
             rust_targets: ""
     runs-on: ${{ fromJSON(matrix.runner) }}
     env:
-      # Tauri skips the Finder AppleScript that lays out the .dmg only when
-      # CI is exactly "true". This Mac's runner does not set that itself.
+      # Skip the Finder AppleScript that lays out the .dmg. It needs this Mac's
+      # runner to be allowed to drive Finder, a permission the runner can lose
+      # when it updates itself; v0.9.0's macOS build failed when the AppleScript
+      # timed out after two minutes. Tauri skips it only when CI is exactly
+      # "true" and TAURI_BUNDLER_DMG_IGNORE_CI is not "true", which
+      # tauri-action sets by default on macOS. This Mac's runner sets neither.
+      # The .dmg then opens without the background and icon layout; local
+      # builds keep it.
       CI: "true"
+      TAURI_BUNDLER_DMG_IGNORE_CI: "false"
     steps:
       - uses: actions/checkout@v4
 
