@@ -81,7 +81,9 @@ export interface LiveRefKind {
   args: string[];
   intervalSec: number;
   timeoutMs: number;
-  parse: "text" | { json: { status: string; detail?: string; error?: string } };
+  parse:
+    | "text"
+    | { json: { status: string; statusFallback?: string; detail?: string; error?: string } };
   enabled: boolean;
 }
 export interface LiveRefsConfig {

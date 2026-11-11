@@ -62,6 +62,9 @@ const TASKKILL_WAIT: Duration = Duration::from_secs(2);
 #[serde(rename_all = "camelCase")]
 pub struct JsonPointers {
     pub status: String,
+    /// Status pointer tried when `status` is missing, null or empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_fallback: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -221,6 +224,7 @@ fn compile_kind(kind: &Kind, check_program: bool) -> Result<Compiled, String> {
     }
     if let Parse::Json(p) = &kind.parse {
         for ptr in std::iter::once(&p.status)
+            .chain(p.status_fallback.iter())
             .chain(p.detail.iter())
             .chain(p.error.iter())
         {
@@ -450,7 +454,8 @@ fn interpret(
                 );
             }
             if exit == Some(0) {
-                if let Some(state) = get(&p.status) {
+                let state = get(&p.status).or_else(|| p.status_fallback.as_deref().and_then(get));
+                if let Some(state) = state {
                     let detail = p.detail.as_deref().and_then(get).unwrap_or_default();
                     return (
                         RefStatus::Ok,
@@ -1121,11 +1126,22 @@ mod tests {
     }
 
     #[test]
+    fn status_fallback_is_optional_and_not_written_when_unset() {
+        let raw = r#"{"status":"/s"}"#;
+        let p: JsonPointers = serde_json::from_str(raw).unwrap();
+        assert_eq!(p.status_fallback, None);
+        assert!(!serde_json::to_string(&p)
+            .unwrap()
+            .contains("statusFallback"));
+    }
+
+    #[test]
     fn json_parse_matches_bora_output() {
         let p = Parse::Json(JsonPointers {
             status: "/result/pane/agent_status".into(),
             detail: Some("/result/pane/terminal_title_stripped".into()),
             error: Some("/error/message".into()),
+            status_fallback: None,
         });
         let ok = r#"{"id":"cli:pane:get","result":{"pane":{"agent_status":"done","terminal_title_stripped":"Layout do OpenRig no herdr-app"}}}"#;
         assert_eq!(
@@ -1144,6 +1160,58 @@ mod tests {
         );
         let (s, _, _) = interpret(&p, err, "", Some(0));
         assert_eq!(s, RefStatus::Error);
+    }
+
+    fn hc_pointers() -> Parse {
+        Parse::Json(JsonPointers {
+            status: "/status/state".into(),
+            status_fallback: Some("/state".into()),
+            detail: Some("/title".into()),
+            error: Some("/error/message".into()),
+        })
+    }
+
+    #[test]
+    fn status_falls_back_when_the_primary_pointer_is_null() {
+        let out = r#"{"state":"live","status":null,"title":"t"}"#;
+        assert_eq!(
+            interpret(&hc_pointers(), out, "", Some(0)),
+            (RefStatus::Ok, "live".into(), "t".into())
+        );
+    }
+
+    #[test]
+    fn primary_status_wins_over_the_fallback() {
+        let out =
+            r#"{"state":"live","status":{"app":"claude-code","state":"working"},"title":"t"}"#;
+        let (s, state, _) = interpret(&hc_pointers(), out, "", Some(0));
+        assert_eq!((s, state.as_str()), (RefStatus::Ok, "working"));
+    }
+
+    #[test]
+    fn no_status_and_no_fallback_is_an_error() {
+        let (s, state, _) = interpret(&hc_pointers(), r#"{"title":"t"}"#, "", Some(0));
+        assert_eq!(
+            (s, state.as_str()),
+            (RefStatus::Error, "no status in output")
+        );
+    }
+
+    #[test]
+    fn compile_rejects_a_relative_fallback_pointer() {
+        let k = Kind {
+            parse: Parse::Json(JsonPointers {
+                status: "/s".into(),
+                status_fallback: Some("state".into()),
+                detail: None,
+                error: None,
+            }),
+            ..kind(r"(a)", "/bin/echo", &["{1}"])
+        };
+        assert_eq!(
+            compile_kind(&k, false).err().unwrap(),
+            "k: JSON pointer `state` must start with /"
+        );
     }
 
     #[test]
@@ -1360,6 +1428,7 @@ mod tests {
                         status: "/s".into(),
                         detail: None,
                         error: None,
+                        status_fallback: None,
                     }),
                     ..named("a")
                 },

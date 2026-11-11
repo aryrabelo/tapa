@@ -106,6 +106,14 @@ The words before the pane id are just a label for you; only the id reaches the
 command (`bora pane get w1BA:p1`). Hover the chip to see the command's output,
 capped at 4 KB, or for JSON output the detail field you set.
 
+With the **hc terminal** preset, `[hc t54]`, `[hc vps/t7]` or
+`[hc <terminal name>]` shows that hc terminal's agent state (`working`, `idle`,
+`done`, …), or for a terminal with no agent its terminal state (`live`,
+`finished`). Hover the chip to see the terminal's title. The command is
+`hc get t54 --json`. A command with JSON output can name a second status
+pointer, used when the first one is missing; that is how terminals without an
+agent still show a state.
+
 Safety: a note can only name a reference, never a command. Commands are defined
 in Settings and Tapa asks you in a native dialog before saving a new or changed
 one; it runs the program directly (no shell), with a time limit, and only the

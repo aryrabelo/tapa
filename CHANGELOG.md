@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **hc terminal** preset for live references: write `[hc t54]`,
+  `[hc vps/t7]` or `[hc <terminal name>]` in a note and the chip shows that
+  terminal's agent state (`working`, `idle`, `done`, …), or for a terminal with
+  no agent its own state (`live`, `finished`); hover it for the terminal's
+  title.
+- A live reference command with JSON output can name a second status pointer,
+  used when the first one is missing.
+
 ## [0.9.1] - 2026-11-11
 
 ### Fixed

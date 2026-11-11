@@ -15,6 +15,9 @@ import {
 /** Matches `[w1BA:p1]`, `[herdr-openrig w1BA:p1]` and `[bora pane get w1BA:p1]`; only the id is passed on. */
 export const BORA_MATCH = "(?:.{0,64} )?(w[0-9A-Za-z]{1,8}:p[0-9]{1,4})";
 
+/** Matches `[hc t54]`, `[hc vps/t7]` and `[hc my-terminal]`; only the terminal is passed on. */
+export const HC_MATCH = "hc ([A-Za-z0-9][A-Za-z0-9._/-]{0,63})";
+
 export interface Draft {
   name: string;
   match: string;
@@ -25,6 +28,7 @@ export interface Draft {
   timeoutMs: string;
   json: boolean;
   status: string;
+  statusFallback: string;
   detail: string;
   error: string;
   enabled: boolean;
@@ -48,6 +52,7 @@ export function toDraft(k: LiveRefKind): Draft {
     timeoutMs: String(k.timeoutMs),
     json: json !== null,
     status: json?.status ?? "",
+    statusFallback: json?.statusFallback ?? "",
     detail: json?.detail ?? "",
     error: json?.error ?? "",
     enabled: k.enabled,
@@ -64,7 +69,14 @@ export function toKind(d: Draft): LiveRefKind {
     intervalSec: Number(d.intervalSec),
     timeoutMs: Number(d.timeoutMs),
     parse: d.json
-      ? { json: { status: d.status.trim(), detail: opt(d.detail), error: opt(d.error) } }
+      ? {
+          json: {
+            status: d.status.trim(),
+            statusFallback: opt(d.statusFallback),
+            detail: opt(d.detail),
+            error: opt(d.error),
+          },
+        }
       : "text",
     enabled: d.enabled,
   };
@@ -96,9 +108,34 @@ const BLANK: Draft = {
   timeoutMs: "3000",
   json: false,
   status: "",
+  statusFallback: "",
   detail: "",
   error: "",
   enabled: true,
+};
+
+const BORA_PRESET: Partial<Draft> = {
+  match: BORA_MATCH,
+  args: "pane\nget\n{1}",
+  intervalSec: "5",
+  timeoutMs: "2000",
+  json: true,
+  status: "/result/pane/agent_status",
+  detail: "/result/pane/terminal_title_stripped",
+  error: "/error/message",
+};
+
+// A terminal with no agent has no agent status; its own state (live, finished) stands in.
+const HC_PRESET: Partial<Draft> = {
+  match: HC_MATCH,
+  args: "get\n{1}\n--json",
+  intervalSec: "5",
+  timeoutMs: "2000",
+  json: true,
+  status: "/status/state",
+  statusFallback: "/state",
+  detail: "/title",
+  error: "/error/message",
 };
 
 let nextId = 1;
@@ -144,8 +181,9 @@ export default function LiveRefsSettings(): React.ReactElement {
       (rs) => rs?.map((r) => (r.id === id ? { ...r, draft: { ...r.draft, ...patch } } : r)) ?? rs,
     );
 
-  const addBora = async () => {
-    const program = (await liveRefsFindProgram("bora").catch(() => null)) ?? "";
+  /** Appends a ready-made row, with the program's path as found on this machine. */
+  const addPreset = async (programName: string, base: string, preset: Partial<Draft>) => {
+    const program = (await liveRefsFindProgram(programName).catch(() => null)) ?? "";
     setRows((rs) => {
       const list = rs ?? [];
       return [
@@ -153,23 +191,12 @@ export default function LiveRefsSettings(): React.ReactElement {
         {
           id: nextId++,
           saved: null,
-          draft: {
-            ...BLANK,
-            name: uniqueName("bora-pane", list),
-            match: BORA_MATCH,
-            program,
-            args: "pane\nget\n{1}",
-            intervalSec: "5",
-            timeoutMs: "2000",
-            json: true,
-            status: "/result/pane/agent_status",
-            detail: "/result/pane/terminal_title_stripped",
-            error: "/error/message",
-          },
+          draft: { ...BLANK, ...preset, name: uniqueName(base, list), program },
         },
       ];
     });
-    if (!program) setNotice({ text: "Could not find bora. Fill in its full path.", error: false });
+    if (!program)
+      setNotice({ text: `Could not find ${programName}. Fill in its full path.`, error: false });
   };
 
   const save = async () => {
@@ -244,8 +271,21 @@ export default function LiveRefsSettings(): React.ReactElement {
         >
           Add command
         </Button>
-        <Button size="sm" variant="outline" disabled={locked} onClick={() => void addBora()}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={locked}
+          onClick={() => void addPreset("bora", "bora-pane", BORA_PRESET)}
+        >
           Add bora pane
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={locked}
+          onClick={() => void addPreset("hc", "hc-terminal", HC_PRESET)}
+        >
+          Add hc terminal
         </Button>
         <Button size="sm" disabled={locked} onClick={() => void save()}>
           {saving ? "Saving…" : "Save"}
@@ -422,6 +462,18 @@ function KindRow({
               value={d.status}
               disabled={locked}
               onChange={(e) => onEdit({ status: e.currentTarget.value })}
+            />
+          </Field>
+          <Field
+            id={`${p}-status-fallback`}
+            label="Status pointer if that one is missing (optional)"
+          >
+            <Input
+              id={`${p}-status-fallback`}
+              className="font-mono"
+              value={d.statusFallback}
+              disabled={locked}
+              onChange={(e) => onEdit({ statusFallback: e.currentTarget.value })}
             />
           </Field>
           <Field id={`${p}-detail`} label="Detail pointer (optional)">
